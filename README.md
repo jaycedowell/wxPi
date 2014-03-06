@@ -1,12 +1,35 @@
-AirPi
-========
+wxPi
+====
 
-A Raspberry Pi weather station and air quality monitor.
+A Raspberry Pi-based Oregon Scientific weather station
 
-This is the code for the project located at http://airpi.es
+Requirements
+------------
+ * Python >=2.7 and <3.0
+ * sqlite3
+ * librtlsdr from http://sdr.osmocom.org/trac/wiki/rtl-sdr
 
-Currently it is split into airpi.py, as well as multiple input and multiple output plugins. airpi.py collects data from each of the input plugins specified in sensors.cfg, and then passes the data provided by them to each output defined in outputs.cfg. The code for each sensor plugin is contained in the 'sensors' folder and the code for each output plugin in the 'outputs' folder.
+Usage
+-----
+  1) Build the decoder.so extension via 'make'
+  
+  2) Update the configuration file 'wxPi.config'
+  
+  3) Run the script via ./wxPi.py
 
-Some of the files are based off code for the Raspberry Pi written by Adafruit: https://github.com/adafruit/Adafruit-Raspberry-Pi-Python-Code
+Supported Sensors
+-----------------
+ * 5D60 - BHTR968 - Indoor temperature/humidity/pressure
+ * 2D10 - RGR968  - Rain gauge
+ * 3D00 - WGR968  - Anemometer
+ * 1D20 - THGR268 - Outdoor temperature/humidity
+ * 1D30 - THGR968 - Outdoor temperature/humidity
 
-For installation instructions, see airpi.es/kit.php
+The data formats used for these sensors come from:
+ * http://www.osengr.org/WxShield/Downloads/OregonScientific-RF-Protocols-II.pdf
+ * http://www.disk91.com/2013/technology/hardware/oregon-scientific-sensors-with-raspberry-pi/
+ * http://www.mattlary.com/2012/06/23/weather-station-project/
+ * Trial and error
+
+Presumably other sensors that transmit v2.1 or v3.0 sensors are also supported if you 
+know the data format.
