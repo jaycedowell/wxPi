@@ -1,6 +1,8 @@
+<<<<<<< HEAD
 *.py[cod]
 
 # C extensions
+*.o
 *.so
 
 # Packages
@@ -34,3 +36,6 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# Data files
+*.dat
