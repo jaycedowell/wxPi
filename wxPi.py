@@ -3,7 +3,7 @@
 
 """
 Script to record 433MHz dat in search of packets from Oregon Scientific 
-weather sensors and send the results to WUnderground.
+weather sensors and a BMP085/180, and send the results to WUnderground.
 
 This script takes no arguments.
 """
@@ -15,8 +15,9 @@ from config import CONFIG_FILE, loadConfig
 from database import Archive
 from decoder import readRTL
 from parser import parseBitStream
-from utils import generateWeatherReport, wuUploader
+from utils import computeDewPoint, computeSeaLevelPressure, generateWeatherReport, wuUploader
 
+from sensors.bmpBackend import BMP085
 
 def main(args):
 	# Read in the configuration file
@@ -31,6 +32,14 @@ def main(args):
 	
 	# Find the packets and save the output
 	output = parseBitStream(bits, elevation=config['elevation'], inputDataDict=output, verbose=config['verbose'])
+	
+	# Poll the BMP085/180
+	ps = BMP085(address=0x77, mode=3, bus=1)
+	output['pressure'] = ps.readPressure() / 100.0 
+	output['pressure'] = computeSeaLevelPressure(output['pressure'], config['elevation'])
+	if 'indoorHumidity' in output.keys():
+		output['indoorTemperature'] = ps.readTemperature()
+		output['indoorDewpoint'] = computeDewPoint(output['indoorTemperature'], output['indoorHumidity'])
 		
 	# Save to the database
 	db.writeData(time.time(), output)

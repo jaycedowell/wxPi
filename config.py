@@ -30,10 +30,7 @@ def loadConfig(filename):
 
 	# Initial values
 	config = {'verbose': False,
-			  'rtlsdr': None,
 			  'duration': 90.0, 
-			  'retainData': False,  
-		  	  'useTimeout': False, 
 			  'includeIndoor': False, 
 			  'elevation': 0.0}
 
@@ -60,8 +57,6 @@ def loadConfig(filename):
 		
 		# Boolean type conversions
 		config['verbose'] = bool(config['verbose'])
-		config['useTimeout'] = bool(config['useTimeout'])
-		config['retainData'] = bool(config['retainData'])
 		config['includeIndoor'] = bool(config['includeIndoor'])
 		
 	except IOError:
