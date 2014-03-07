@@ -1,8 +1,6 @@
 #!/usr/bin/python
 
 import time
-import math
-
 from Adafruit_I2C import Adafruit_I2C
 
 # ===========================================================================
@@ -50,8 +48,8 @@ class BMP085 :
   _cal_MD = 0
 
   # Constructor
-  def __init__(self, address=0x77, mode=1, bus=0, debug=False):
-    self.i2c = Adafruit_I2C(address, bus)
+  def __init__(self, address=0x77, mode=1, debug=False):
+    self.i2c = Adafruit_I2C(address)
 
     self.address = address
     self.debug = debug
@@ -65,19 +63,31 @@ class BMP085 :
     # Read the calibration data
     self.readCalibrationData()
 
+  def readS16(self, register):
+    "Reads a signed 16-bit value"
+    hi = self.i2c.readS8(register)
+    lo = self.i2c.readU8(register+1)
+    return (hi << 8) + lo
+
+  def readU16(self, register):
+    "Reads an unsigned 16-bit value"
+    hi = self.i2c.readU8(register)
+    lo = self.i2c.readU8(register+1)
+    return (hi << 8) + lo
+
   def readCalibrationData(self):
     "Reads the calibration data from the IC"
-    self._cal_AC1 = self.i2c.readS16(self.__BMP085_CAL_AC1)   # INT16
-    self._cal_AC2 = self.i2c.readS16(self.__BMP085_CAL_AC2)   # INT16
-    self._cal_AC3 = self.i2c.readS16(self.__BMP085_CAL_AC3)   # INT16
-    self._cal_AC4 = self.i2c.readU16(self.__BMP085_CAL_AC4)   # UINT16
-    self._cal_AC5 = self.i2c.readU16(self.__BMP085_CAL_AC5)   # UINT16
-    self._cal_AC6 = self.i2c.readU16(self.__BMP085_CAL_AC6)   # UINT16
-    self._cal_B1 = self.i2c.readS16(self.__BMP085_CAL_B1)     # INT16
-    self._cal_B2 = self.i2c.readS16(self.__BMP085_CAL_B2)     # INT16
-    self._cal_MB = self.i2c.readS16(self.__BMP085_CAL_MB)     # INT16
-    self._cal_MC = self.i2c.readS16(self.__BMP085_CAL_MC)     # INT16
-    self._cal_MD = self.i2c.readS16(self.__BMP085_CAL_MD)     # INT16
+    self._cal_AC1 = self.readS16(self.__BMP085_CAL_AC1)   # INT16
+    self._cal_AC2 = self.readS16(self.__BMP085_CAL_AC2)   # INT16
+    self._cal_AC3 = self.readS16(self.__BMP085_CAL_AC3)   # INT16
+    self._cal_AC4 = self.readU16(self.__BMP085_CAL_AC4)   # UINT16
+    self._cal_AC5 = self.readU16(self.__BMP085_CAL_AC5)   # UINT16
+    self._cal_AC6 = self.readU16(self.__BMP085_CAL_AC6)   # UINT16
+    self._cal_B1 = self.readS16(self.__BMP085_CAL_B1)     # INT16
+    self._cal_B2 = self.readS16(self.__BMP085_CAL_B2)     # INT16
+    self._cal_MB = self.readS16(self.__BMP085_CAL_MB)     # INT16
+    self._cal_MC = self.readS16(self.__BMP085_CAL_MC)     # INT16
+    self._cal_MD = self.readS16(self.__BMP085_CAL_MD)     # INT16
     if (self.debug):
       self.showCalibrationData()
 
@@ -99,7 +109,7 @@ class BMP085 :
     "Reads the raw (uncompensated) temperature from the sensor"
     self.i2c.write8(self.__BMP085_CONTROL, self.__BMP085_READTEMPCMD)
     time.sleep(0.005)  # Wait 5ms
-    raw = self.i2c.readU16(self.__BMP085_TEMPDATA)
+    raw = self.readU16(self.__BMP085_TEMPDATA)
     if (self.debug):
       print "DBG: Raw Temp: 0x%04X (%d)" % (raw & 0xFFFF, raw)
     return raw
@@ -167,6 +177,7 @@ class BMP085 :
       UP = 23843
       self._cal_AC6 = 23153
       self._cal_AC5 = 32757
+      self._cal_MB = -32768;
       self._cal_MC = -8711
       self._cal_MD = 2868
       self._cal_B1 = 6190
@@ -191,7 +202,7 @@ class BMP085 :
 
     # Pressure Calculations
     B6 = B5 - 4000
-    X1 = (self._cal_B2 * (B6 * B6) >> 12) >> 11
+    X1 = (self._cal_B2 * ((B6 * B6) >> 12)) >> 11
     X2 = (self._cal_AC2 * B6) >> 11
     X3 = X1 + X2
     B3 = (((self._cal_AC1 * 4 + X3) << self.mode) + 2) / 4
@@ -199,6 +210,7 @@ class BMP085 :
       print "DBG: B6 = %d" % (B6)
       print "DBG: X1 = %d" % (X1)
       print "DBG: X2 = %d" % (X2)
+      print "DBG: X3 = %d" % (X3)
       print "DBG: B3 = %d" % (B3)
 
     X1 = (self._cal_AC3 * B6) >> 13
@@ -209,6 +221,7 @@ class BMP085 :
     if (self.debug):
       print "DBG: X1 = %d" % (X1)
       print "DBG: X2 = %d" % (X2)
+      print "DBG: X3 = %d" % (X3)
       print "DBG: B4 = %d" % (B4)
       print "DBG: B7 = %d" % (B7)
 
@@ -217,9 +230,12 @@ class BMP085 :
     else:
       p = (B7 / B4) * 2
 
+    if (self.debug):
+      print "DBG: X1 = %d" % (X1)
+      
     X1 = (p >> 8) * (p >> 8)
     X1 = (X1 * 3038) >> 16
-    X2 = (-7375 * p) >> 16
+    X2 = (-7357 * p) >> 16
     if (self.debug):
       print "DBG: p  = %d" % (p)
       print "DBG: X1 = %d" % (X1)
@@ -241,16 +257,3 @@ class BMP085 :
     return altitude
 
     return 0
-
-  def readMSLPressure(self, altitude):
-    "Calculates the mean sea level pressure"
-    pressure = float(self.readPressure())
-    T0 = float(altitude) / 44330
-    T1 = math.pow(1 - T0, 5.255)
-    mslpressure = pressure / T1
-    return mslpressure
-
-if __name__=="__main__":
-	bmp = BMP085()
-	print str(bmp.readTemperature()) + " C"
-	print str(bmp.readPressure()) + " Pa"

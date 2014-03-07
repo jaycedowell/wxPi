@@ -34,7 +34,7 @@ def main(args):
 	output = parseBitStream(bits, elevation=config['elevation'], inputDataDict=output, verbose=config['verbose'])
 	
 	# Poll the BMP085/180
-	ps = BMP085(address=0x77, mode=3, bus=1)
+	ps = BMP085(address=0x77, mode=3)
 	output['pressure'] = ps.readPressure() / 100.0 
 	output['pressure'] = computeSeaLevelPressure(output['pressure'], config['elevation'])
 	if 'indoorHumidity' in output.keys():
