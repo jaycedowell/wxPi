@@ -254,6 +254,14 @@ class BMP085 :
     altitude = 44330.0 * (1.0 - pow(pressure / seaLevelPressure, 0.1903))
     if (self.debug):
       print "DBG: Altitude = %d" % (altitude)
+      
     return altitude
 
-    return 0
+  def readMSLPressure(self, altitude):
+    "Calculates the mean sea level pressure"
+    pressure = float(self.readPressure())
+    T0 = float(altitude) / 44330
+    T1 = math.pow(1 - T0, 5.255)
+    mslpressure = pressure / T1
+    
+    return mslpressure
