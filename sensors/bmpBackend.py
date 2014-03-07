@@ -177,7 +177,7 @@ class BMP085 :
       UP = 23843
       self._cal_AC6 = 23153
       self._cal_AC5 = 32757
-      self._cal_MB = -32768;
+      self._cal_MB = -32767
       self._cal_MC = -8711
       self._cal_MD = 2868
       self._cal_B1 = 6190
