@@ -352,6 +352,7 @@ def wuUploader(id, password, data, archive=None, includeIndoor=False, verbose=Fa
 			
 	# Post to Wunderground for the PWS protocol (if there is something 
 	# interesting to send)
+	status = False
 	if len(pwsData.keys()) > 4:
 		## Convert to a GET-safe string
 		pwsData = urllib.urlencode(pwsData)
@@ -361,7 +362,14 @@ def wuUploader(id, password, data, archive=None, includeIndoor=False, verbose=Fa
 			
 		## Send
 		uh = urllib.urlopen(url)
-		print "WUnderground PWS update status: %s" % uh.read()
+		status = uh.read()
+		print "WUnderground PWS update status: %s" % status
 		uh.close()
 		
-	return True
+		## Evaluate
+		if status.find('success') != -1:
+			status = True
+		else:
+			status = False
+		
+	return status
