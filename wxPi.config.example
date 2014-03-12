@@ -21,3 +21,12 @@ PASSWORD: Your_Password_Here
 # Recording duration in seconds
 #duration: 90
 
+# LED GPIO pins
+# Red LED pin
+#red: 27
+
+# Yellow LED pin
+#yellow: 17
+
+# Green LED pin
+#green: 4
