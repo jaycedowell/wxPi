@@ -9,6 +9,7 @@ Requirements
  * Python >=2.7 and <3.0
  * sqlite3
  * librtlsdr from http://sdr.osmocom.org/trac/wiki/rtl-sdr
+ * RPi.GPIO
 
 Usage
 -----
