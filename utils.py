@@ -218,8 +218,9 @@ def generateWeatherReport(output, includeIndoor=True):
 		wxReport += " -> %.1f F with %i%% humidity\n" % (temp_C2F(output['indoorTemperature']), output['indoorHumidity'])
 		wxReport += " -> dew point is %.1f F\n" % (temp_C2F(output['indoorDewpoint']),)
 		wxReport += " -> barometric pressure is %.2f in-Hg\n" % pressure_mb2inHg(output['pressure'])
-		if output['comfortLevel'] != 'unknown':
-			wxReport += " -> comfort level is %s\n" % output['comfortLevel']
+		if 'comfortLevel' in output.keys():
+			if output['comfortLevel'] != 'unknown':
+				wxReport += " -> comfort level is %s\n" % output['comfortLevel']
 		wxReport += "\n"
 	
 	if 'temperature' in output.keys():

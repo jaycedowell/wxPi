@@ -88,11 +88,12 @@ class Archive(object):
 		          'indoorTemperature': row['inTemp'], 'indoorHumidity': row['inHumidity'], 
 		          'indoorDewpoint': row['inDewpoint'], 'pressure': row['barometer'], 
 		          'rainrate': row['rainRate'], 'rainfall': row['rain'], 
-		          'altTemperature': [], 'altHumdity': [], 'altDewpoint': [],
+		          'average': row['windSpeed'], 'gust': row['windGust'], 'direction': row['windDir'], 
+			  'altTemperature': [], 'altHumidity': [], 'altDewpoint': [],
 			  'uvIndex': row['uv']}
 		for i in xrange(1, 5):
 			output['altTemperature'].append( row['outTemp%i' % i] if row['outTemp%i' % i] != -99 else None )
-			output['altHumdity'].append( row['outHumidity%i' % i] if row['outHumidity%i' % i] != -99 else None )
+			output['altHumidity'].append( row['outHumidity%i' % i] if row['outHumidity%i' % i] != -99 else None )
 			output['altDewpoint'].append( row['outDewpoint%i' % i] if row['outDewpoint%i' % i] != -99 else None )
 	
 		return timestamp, output
