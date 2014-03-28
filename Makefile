@@ -1,12 +1,17 @@
-CFLAGS = $(shell python-config --cflags) $(shell pkg-config --cflags librtlsdr)
+CFLAGS = $(shell python-config --cflags)
+LDFLAGS = $(shell python-config --ldflags) -lwiringPi
 
-LDFLAGS = $(shell python-config --ldflags) $(shell pkg-config --libs librtlsdr)
+decoder.so: decoder.o RCSwitch.o RcOok.o
+	$(CXX) -o decoder.so decoder.o RCSwitch.o RcOok.o -lm -shared $(LDFLAGS)
 
-decoder.so: decoder.o
-	$(CC) -o decoder.so decoder.o -lm -shared $(LDFLAGS)
+decoder.o: decoder.cpp
+	$(CXX) -c $(CFLAGS) -fPIC -o decoder.o decoder.cpp -O3
 
-decoder.o: decoder.c
-	$(CC) -c $(CFLAGS) -fPIC -o decoder.o decoder.c -O3
+RCSwitch.o: RCSwitch.cpp
+	$(CXX) -c $(CFLAGS) -fPIC -o RCSwitch.o RCSwitch.cpp -O3
+	
+RcOok.o: RcOok.cpp
+	$(CXX) -c $(CFLAGS) -fPIC -o RcOok.o RcOok.cpp -O3
 
 clean:
-	rm -rf decoder.o decoder.so
+	rm -rf RCSwitch.o RcOok.o decoder.o decoder.so
