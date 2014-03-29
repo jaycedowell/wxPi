@@ -8,21 +8,23 @@ Requirements
 ------------
  * Python >=2.7 and <3.0
  * sqlite3
- * librtlsdr from http://sdr.osmocom.org/trac/wiki/rtl-sdr
  * RPi.GPIO
+ * wiringPi
+ * a 433 MHz radio with AM demodulation, e.g., QAM-RX3-433
 
 Usage
 -----
-  1) Build the decoder.so extension via 'make'
+  1) Wire up the radio, LEDs, and pressure sensor
   
-  2) Update the configuration file 'wxPi.config'
+  2) Build the decoder.so extension via 'make'
   
-  3) Run the script via ./wxPi.py
+  3) Update the configuration file 'wxPi.config'
+  
+  4) Run the script via ./wxPi.py
 
 Supported Sensors
 -----------------
 Oregon Scientific
-+++++++++++++++++
  * 5D60 - BHTR968 - Indoor temperature/humidity/pressure
  * 2D10 - RGR968  - Rain gauge
  * 3D00 - WGR968  - Anemometer
@@ -30,7 +32,6 @@ Oregon Scientific
  * 1D30 - THGR968 - Outdoor temperature/humidity
 
 Bosch
-+++++
  * BMP085
  * BMP180
 

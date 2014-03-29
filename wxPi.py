@@ -26,7 +26,8 @@ def main(args):
 	
 	# Record some data and extract the bits on-the-fly
 	ledOn(config['redPin'])
-	packets = read433(config['radioPin'], int(round(config['duration'])))
+	packets = read433(config['radioPin'], int(round(config['duration'])), 
+				verbose=config['verbose'])
 	ledOff(config['redPin'])
 	
 	# Read in the most recent state
@@ -34,7 +35,9 @@ def main(args):
 	try:
 		db = Archive()
 		tLast, output = db.getData()
-	except RuntimeError:
+	except RuntimeError, e:
+		print "WARNING: %s" % str(e)
+		
 		db = None
 		tLast, output = time.time(), {}
 		

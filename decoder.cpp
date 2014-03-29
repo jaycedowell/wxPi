@@ -30,13 +30,15 @@ static void sighandler(int signum)
   Manchester decoded bits.
 */
 
-static PyObject *read433(PyObject *self, PyObject *args) {
+static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	PyObject *output, *bits, *temp, *temp2, *temp2a, *temp2b, *temp3;
-	long inputPin, duration, tStart;
+	long inputPin, duration, verbose, tStart;
 	struct sigaction sigact;
 	char message[512];
 	
-	if( !PyArg_ParseTuple(args, "ii", &inputPin, &duration) ) {
+	verbose = 0;
+	static char *kwlist[] = {"inputPin", "duration", "verbose", NULL};
+	if( !PyArg_ParseTupleAndKeywords(args, kwds, "ii|i", kwlist, &inputPin, &duration, &verbose) ) {
 		PyErr_Format(PyExc_RuntimeError, "Invalid parameters");
 		return NULL;
 	}
@@ -73,7 +75,9 @@ static PyObject *read433(PyObject *self, PyObject *args) {
 		if ( rc->OokAvailable() ) {
 			rc->getOokCode(message);
 			
-			cout << message << "\n" << flush;
+			if( verbose ) {
+				cout << message << "\n" << flush;
+			}
 			
 			temp = PyString_FromString(message);
 			temp2 = PyObject_CallMethod(temp, "split", "(si)", " ", 1);
@@ -122,7 +126,7 @@ Based on:\n\
 */
 
 static PyMethodDef DecoderMethods[] = {
-	{"read433", (PyCFunction) read433, METH_VARARGS, read433_doc}, 
+	{"read433", (PyCFunction) read433, METH_VARARGS | METH_KEYWORDS, read433_doc}, 
 	{NULL, NULL, 0, NULL}
 };
 
