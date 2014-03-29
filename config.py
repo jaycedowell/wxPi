@@ -30,9 +30,14 @@ def loadConfig(filename):
 
 	# Initial values
 	config = {'verbose': False,
+			  'radioPin': 18, 
 			  'duration': 90.0, 
 			  'includeIndoor': False, 
-			  'elevation': 0.0}
+			  'elevation': 0.0, 
+			  'enableBMP085': True, 
+			  'redPin': -1, 
+			  'yellowPin': -1, 
+			  'greenPin': -1}
 
 	# Parse the file
 	try:
@@ -51,14 +56,18 @@ def loadConfig(filename):
 			config[key] = value
 		fh.close()
 		
+		# Integer type conversions
+		for key in ('radioPin', 'redPin', 'yellowPin', 'greenPin'):
+			config[key] = int(config[key])
+			
 		# Float type conversion
-		config['duration'] = float(config['duration'])
-		config['elevation'] = float(config['elevation'])
-		
+		for key in ('duration', 'elevation'):
+			config[key] = float(config[key])
+			
 		# Boolean type conversions
-		config['verbose'] = bool(config['verbose'])
-		config['includeIndoor'] = bool(config['includeIndoor'])
-		
+		for key in ('verbose', 'includeIndoor', 'enableBMP085'):
+			config[key] = bool(config[key])
+			
 	except IOError:
 		pass
 		

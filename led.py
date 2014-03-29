@@ -6,11 +6,27 @@ import time
 import threading
 
 __version__ = '0.1'
-__all__ = ['on', 'off', 'blinkOn', 'blinkOff', '__version__', '__all__']
+__all__ = ['setOutput', 'on', 'off', 'blinkOn', 'blinkOff', '__version__', '__all__']
 
 
 # Internal state dictionary used by the blinkOn/blinkOff functions
 _state = {}
+
+
+def setOutput(pin):
+	"""
+	Export the specified GPIO pin and set it to output.
+	"""
+	
+	pin = int(pin)
+	# Export
+	fh = open('/sys/class/gpio/export', 'w')
+	fh.write(str(pine))
+	fh.close()
+	# Direction
+	fh = open('/sys/class/gpio/gpio%i/direction' % pin, 'w')
+	fh.write('out')
+	fh.close()
 
 
 def on(pin):

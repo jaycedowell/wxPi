@@ -18,15 +18,21 @@ PASSWORD: Your_Password_Here
 # Station elevation in meters
 #elevation: 0
 
+# Radio input GPIO pin
+#radioPin: 18
+
 # Recording duration in seconds
 #duration: 90
 
-# LED GPIO pins
+# Enable reading a BMP085/BMP180 sensor over I2C
+#enableBMP085: True
+
+# LED GPIO pins.  Setting each to -1 disables the LED
 # Red LED pin
-#red: 27
+#redPin: 27
 
 # Yellow LED pin
-#yellow: 17
+#yellowPin: 17
 
 # Green LED pin
-#green: 4
+#greenPin: 4

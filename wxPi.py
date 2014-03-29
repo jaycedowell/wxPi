@@ -13,7 +13,7 @@ import time
 
 from config import CONFIG_FILE, loadConfig
 from database import Archive
-from decoder import readRTL
+from decoder import read433
 from parser import parseBitStream
 from utils import computeDewPoint, computeSeaLevelPressure, generateWeatherReport, wuUploader
 
@@ -26,42 +26,49 @@ def main(args):
 	
 	# Record some data and extract the bits on-the-fly
 	ledOn(config['red'])
-	bits = readRTL(int(config['duration']))
+	packets = read433(config['radioPin'], config['duration'])
 	ledOff(config['red'])
 	
 	# Read in the most recent state
 	ledOn(config['yellow'])
-	db = Archive()
-	tLast, output = db.getData()
-	
+	try:
+		db = Archive()
+		tLast, output = db.getData()
+	except RuntimeError:
+		db = None
+		tLast, output = time.time(), {}
+		
 	# Find the packets and save the output
-	output = parseBitStream(bits, elevation=config['elevation'], inputDataDict=output, verbose=config['verbose'])
+	output = parsePacketStream(packets, elevation=config['elevation'], inputDataDict=output, verbose=config['verbose'])
 	ledOff(config['yellow'])	
 
 	# Poll the BMP085/180
-	ledOn(config['red'])
-	ps = BMP085(address=0x77, mode=3)
-	output['pressure'] = ps.readPressure() / 100.0 
-	output['pressure'] = computeSeaLevelPressure(output['pressure'], config['elevation'])
-	if 'indoorHumidity' in output.keys():
-		output['indoorTemperature'] = ps.readTemperature()
-		output['indoorDewpoint'] = computeDewPoint(output['indoorTemperature'], output['indoorHumidity'])
-	ledOff(config['red'])
+	if config['enableBMP085']:
+		ledOn(config['red'])
+		ps = BMP085(address=0x77, mode=3)
+		output['pressure'] = ps.readPressure() / 100.0 
+		output['pressure'] = computeSeaLevelPressure(output['pressure'], config['elevation'])
+		if 'indoorHumidity' in output.keys():
+			output['indoorTemperature'] = ps.readTemperature()
+			output['indoorDewpoint'] = computeDewPoint(output['indoorTemperature'], output['indoorHumidity'])
+		ledOff(config['red'])
 	
 	# Save to the database
-	db.writeData(time.time(), output)
-	
-	# Upload
 	ledOn(config['yellow'])
+	if db is not None:
+		db.writeData(time.time(), output)
+		
+	# Upload
 	status = wuUploader(config['ID'], config['PASSWORD'], output, archive=db, 
 				includeIndoor=config['includeIndoor'], verbose=config['verbose'])
 	ledOff(config['yellow'])
 	
-	# Report status of upload
+	# Report status of upload...
 	if status:
 		ledColor = config['green']
 	else:
 		ledColor = config['red']
+	# ... with an LED
 	blinkOn(ledColor)
 	time.sleep(3)
 	blinkOff(ledColor)
