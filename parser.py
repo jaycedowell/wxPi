@@ -68,7 +68,6 @@ def _parseBHTR968(data):
 	baro = int(baro, 16)
 	if baro >= 128:
 		baro -= 256
-	print len(data)
 	output['pressure'] = baro + 856
 		
 	# Pressure-based weather forecast
@@ -181,9 +180,8 @@ def parsePacketv21(packet, wxData=None, verbose=False):
 	  * 1D30 - THGR968 - Outdoor temperature/humidity
 	"""
 	
-	# Bit swap
+	# Consolidate
 	packet = ''.join(packet)
-	print packet
 	
 	# Check for a valid sync word.
 	if packet[0] != 'A':

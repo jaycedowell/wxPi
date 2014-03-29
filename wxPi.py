@@ -14,7 +14,7 @@ import time
 from config import CONFIG_FILE, loadConfig
 from database import Archive
 from decoder import read433
-from parser import parseBitStream
+from parser import parsePacketStream
 from utils import computeDewPoint, computeSeaLevelPressure, generateWeatherReport, wuUploader
 
 from led import on as ledOn, off as ledOff, blinkOn, blinkOff
@@ -25,12 +25,12 @@ def main(args):
 	config = loadConfig(CONFIG_FILE)
 	
 	# Record some data and extract the bits on-the-fly
-	ledOn(config['red'])
-	packets = read433(config['radioPin'], config['duration'])
-	ledOff(config['red'])
+	ledOn(config['redPin'])
+	packets = read433(config['radioPin'], int(round(config['duration'])))
+	ledOff(config['redPin'])
 	
 	# Read in the most recent state
-	ledOn(config['yellow'])
+	ledOn(config['yellowPin'])
 	try:
 		db = Archive()
 		tLast, output = db.getData()
@@ -40,34 +40,34 @@ def main(args):
 		
 	# Find the packets and save the output
 	output = parsePacketStream(packets, elevation=config['elevation'], inputDataDict=output, verbose=config['verbose'])
-	ledOff(config['yellow'])	
+	ledOff(config['yellowPin'])	
 
 	# Poll the BMP085/180
 	if config['enableBMP085']:
-		ledOn(config['red'])
+		ledOn(config['redPin'])
 		ps = BMP085(address=0x77, mode=3)
 		output['pressure'] = ps.readPressure() / 100.0 
 		output['pressure'] = computeSeaLevelPressure(output['pressure'], config['elevation'])
 		if 'indoorHumidity' in output.keys():
 			output['indoorTemperature'] = ps.readTemperature()
 			output['indoorDewpoint'] = computeDewPoint(output['indoorTemperature'], output['indoorHumidity'])
-		ledOff(config['red'])
+		ledOff(config['redPin'])
 	
 	# Save to the database
-	ledOn(config['yellow'])
+	ledOn(config['yellowPin'])
 	if db is not None:
 		db.writeData(time.time(), output)
 		
 	# Upload
 	status = wuUploader(config['ID'], config['PASSWORD'], output, archive=db, 
 				includeIndoor=config['includeIndoor'], verbose=config['verbose'])
-	ledOff(config['yellow'])
+	ledOff(config['yellowPin'])
 	
 	# Report status of upload...
 	if status:
-		ledColor = config['green']
+		ledColor = config['greenPin']
 	else:
-		ledColor = config['red']
+		ledColor = config['redPin']
 	# ... with an LED
 	blinkOn(ledColor)
 	time.sleep(3)

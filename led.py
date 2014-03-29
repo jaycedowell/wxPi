@@ -24,6 +24,7 @@ def setOutput(pin):
 		fh = open('/sys/class/gpio/export', 'w')
 		fh.write(str(pine))
 		fh.close()
+		
 		# Direction
 		fh = open('/sys/class/gpio/gpio%i/direction' % pin, 'w')
 		fh.write('out')
@@ -50,8 +51,8 @@ def off(pin):
 	pin = int(pin)
 	if pin > 0:
 		fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
-        fh.write('0')
-        fh.close()
+        	fh.write('0')
+        	fh.close()
 
 
 class _blink(object):
