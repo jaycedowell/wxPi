@@ -45,3 +45,7 @@ The data formats used for these sensors come from:
 
 Presumably other sensors that transmit v2.1 or v3.0 sensors are also supported if you 
 know the data format.
+
+Breadboard Example
+------------------
+![wxPi Breadboard](https://github.com/jaycedowell/wxPi/blob/nonRTL/wxPi_breadboard.png)
