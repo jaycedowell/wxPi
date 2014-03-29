@@ -5,7 +5,7 @@ Module for controlling LEDs hooked into the GPIO ports on a Rasberry Pi.
 import time
 import threading
 
-__version__ = '0.1'
+__version__ = '0.2'
 __all__ = ['setOutput', 'on', 'off', 'blinkOn', 'blinkOff', '__version__', '__all__']
 
 
@@ -19,14 +19,15 @@ def setOutput(pin):
 	"""
 	
 	pin = int(pin)
-	# Export
-	fh = open('/sys/class/gpio/export', 'w')
-	fh.write(str(pine))
-	fh.close()
-	# Direction
-	fh = open('/sys/class/gpio/gpio%i/direction' % pin, 'w')
-	fh.write('out')
-	fh.close()
+	if pin > 0:
+		# Export
+		fh = open('/sys/class/gpio/export', 'w')
+		fh.write(str(pine))
+		fh.close()
+		# Direction
+		fh = open('/sys/class/gpio/gpio%i/direction' % pin, 'w')
+		fh.write('out')
+		fh.close()
 
 
 def on(pin):
@@ -35,9 +36,10 @@ def on(pin):
 	"""
 	
 	pin = int(pin)
-	fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
-	fh.write('1')
-	fh.close()
+	if pin > 0:
+		fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
+		fh.write('1')
+		fh.close()
 
 
 def off(pin):
@@ -46,7 +48,8 @@ def off(pin):
 	"""
 	
 	pin = int(pin)
-	fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
+	if pin > 0:
+		fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
         fh.write('0')
         fh.close()
 
@@ -114,16 +117,16 @@ def blinkOn(pin, blinkPeriod=0.25):
 	
 	# Pin
 	pin = int(pin)
-	
-	# Are we already blinking?
-	try:
-		_state[pin].stop()
-	except KeyError:
-		pass
+	if pin > 0:
+		# Are we already blinking?
+		try:
+			_state[pin].stop()
+		except KeyError:
+			pass
 		
-	# Start
-	_state[pin] = _blink(pin, blinkPeriod=blinkPeriod)
-	_state[pin].start()
+		# Start
+		_state[pin] = _blink(pin, blinkPeriod=blinkPeriod)
+		_state[pin].start()
 
 
 def blinkOff(pin):
@@ -133,10 +136,10 @@ def blinkOff(pin):
 	
 	# Pin
 	pin = int(pin)
-	
-	# Are we already blinking?
-	try:
-		_state[pin].stop()
-		del _state[pin]
-	except KeyError:
-		pass
+	if pin > 0:
+		# Are we already blinking?
+		try:
+			_state[pin].stop()
+			del _state[pin]
+		except KeyError:
+			pass
