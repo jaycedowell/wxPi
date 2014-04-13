@@ -11,6 +11,8 @@ This script takes no arguments.
 import os
 import sys
 import time
+import logging
+import logging.handlers
 
 from config import CONFIG_FILE, loadConfig
 from database import Archive
@@ -91,6 +93,13 @@ def main(args):
 	# Read in the configuration file
 	config = loadConfig(CONFIG_FILE)
 	
+	# Setup the logging
+	logger = logging.getLogger(__main__)
+	logger.setLevel(logging.INFO)
+	
+	handler = logging.handlers.SysLogHandler(address = '/dev/log')
+	logger.addHandler(handler)
+	
 	# Open the database and read in the most recent state.  If the database doesn't exist
 	# or the state is stale we need to poll the 
 	try:
@@ -152,8 +161,10 @@ def main(args):
 			# Report status of upload...
 			if uploadStatus:
 				ledColor = config['greenPin']
+				logger.info('Posted weather data to WUnderground')
 			else:
 				ledColor = config['redPin']
+				logger.error('Failed to post weather data to WUnderground')
 			# ... with an LED
 			blinkOn(ledColor)
 			time.sleep(3)

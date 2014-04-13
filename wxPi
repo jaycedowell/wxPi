@@ -1,0 +1,72 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:        wxPi
+# Required-Start:  none
+# Required-Stop:   none
+# Default-Start:   2 3 4 5
+# Default-Stop:    1
+# Short-Description: Start the wxPi weather logging software
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+WXPI_PATH = your_path_here
+DAEMON=$WXPI_PATH/wxPi.py
+PIDFILE=/var/run/wxPi.pid
+
+#test -x $DAEMON || exit 5
+
+LOCKFILE=/var/lock/wxPi
+
+lock_can() {
+	if [ -x /usr/bin/lockfile-create ]; then
+		lockfile-create $LOCKFILE
+		lockfile-touch $LOCKFILE &
+		LOCKTOUCHPID="$!"
+	fi
+}
+
+unlock_can() {
+	if [ -x /usr/bin/lockfile-create ] ; then
+		kill $LOCKTOUCHPID
+		lockfile-remove $LOCKFILE
+	fi
+}
+
+case $1 in
+	start)
+		log_daemon_msg "Starting wxPi" "wxPi.py"
+		lock_can
+  		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON -- -p $PIDFILE
+		status=$?
+		unlock_can
+		log_end_msg $status
+  		;;
+	stop)
+		log_daemon_msg "Stopping wxPi" "wxPi.py"
+  		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
+		log_end_msg $?
+		rm -f $PIDFILE
+  		;;
+	restart|force-reload)
+		$0 stop && sleep 2 && $0 start
+  		;;
+	try-restart)
+		if $0 status >/dev/null; then
+			$0 restart
+		else
+			exit 0
+		fi
+		;;
+	reload)
+		exit 3
+		;;
+	status)
+		status_of_proc -p $PIDFILE $DAEMON "wxPi"
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart|try-restart|force-reload|status}"
+		exit 2
+		;;
+esac
