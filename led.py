@@ -51,8 +51,8 @@ def off(pin):
 	pin = int(pin)
 	if pin > 0:
 		fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
-        	fh.write('0')
-        	fh.close()
+		fh.write('0')
+		fh.close()
 
 
 class _blink(object):
