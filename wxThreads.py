@@ -1,6 +1,8 @@
+import time
 import logging
 import threading
 
+from database import Archive
 from decoder import read433
 from parser import parsePacketStream
 from utils import computeDewPoint, computeSeaLevelPressure, generateWeatherReport, wuUploader
@@ -9,17 +11,18 @@ from led import LED
 from sensors.bmpBackend import BMP085
 
 
+__version__ = "0.1"
+__revision__ = "$Rev$"
+__all__ = ["initState", "RadioMonitor", "BMP085Monitor", "Archiver", "__version__", "__revision__", "__all__"]
+
+
 # The current weather data state and its lock
 tData = 0.0
 sensorData = {}
 stateLock = threading.Semaphore()
 
 
-# Logging framework
-wxThreadsLogger = logging.getLogger('__main__')
-
-
-def initState():
+def initState(config):
 	"""
 	Initialize the current state using values stored in the database.
 	"""
@@ -37,7 +40,7 @@ def initState():
 	except RuntimeError, e:
 		db = None
 		tData, sensorData = time.time(), {}
-		wxThreadsLogger.error(str(e))
+		logging.error(str(e))
 		
 	# Release the lock
 	stateLock.release()
@@ -68,7 +71,8 @@ class RadioMonitor(object):
 		self.thread.setDaemon(1)
 		self.alive.set()
 		self.thread.start()
-		
+		print "Here"
+			
 	def stop(self):
 		"""
 		Stop the radio monitor.
@@ -84,7 +88,8 @@ class RadioMonitor(object):
 		Monitor the radio looking for data
 		"""
 		
-		read433(self.config['radioPin'], self.callback, verbose=self.config['verbose'])
+		print "There"
+		read433(self.config['radioPin'], self.callback)
 			
 	def callback(self, packets):
 		"""
@@ -92,23 +97,32 @@ class RadioMonitor(object):
 		"""
 		
 		## Log this packet in debugging mode
-		wxThreadsLogger.debug("Got packets: %s" % str(packets))
+		print 'II', packets
+		logging.debug("Got packets: %s" % str(packets))
 		
 		## Acquire the lock on the current state
 		stateLock.acquire()
 		
-		## Turn on the red LED
-		self.config['red'].on()
+		print "Here2"
+
+		### Turn on the red LED
+		#self.config['red'].on()
 		
 		## Parse the available data
 		tData = time.time()
+		print "Test"
+		packets = tuple(packets.split(None, 1))
+		packets = [packets,]
+		print packets
 		sensorData = parsePacketStream(packets, elevation=self.config['elevation'], 
 										inputDataDict=sensorData, 
 										verbose=self.config['verbose'])
 										
-		## Turn on the red LED
-		self.config['red'].off()
-		
+		### Turn on the red LED
+		#self.config['red'].off()
+	
+		print "Done"
+			
 		## Release the lock
 		stateLock.release()
 		
@@ -183,7 +197,7 @@ class BMP085Monitor(object):
 			
 			## Done
 			t1 = time.time()
-			tStop = self.config['duration'] - (t1-t0)
+			tSleep = self.config['duration'] - (t1-t0)
 			
 			## Sleep
 			time.sleep(tSleep)
@@ -246,7 +260,7 @@ class Archiver(object):
 					db.writeData(tData, sensorData)
 					tLastUpdate = 1.0*tData
 					
-					wxThreadsLogger.info('Saving current state to archive')
+					logging.info('Saving current state to archive')
 					
 			## Turn off the yellow LED
 			self.config['yellow'].off()
@@ -256,7 +270,7 @@ class Archiver(object):
 			
 			## Done
 			t1 = time.time()
-			tStop = self.config['duration'] - (t1-t0)
+			tSleep = self.config['duration'] - (t1-t0)
 			
 			## Sleep
 			time.sleep(tSleep)

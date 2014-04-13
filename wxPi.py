@@ -18,6 +18,7 @@ import logging.handlers
 import threading
 
 from config import CONFIG_FILE, loadConfig
+from wxThreads import *
 from utils import wuUploader
 
 """
@@ -146,25 +147,24 @@ def main(args):
 	# Setup the logging
 	## Basic
 	logger = logging.getLogger(__name__)
-	logger.setLevel(logging.INFO)
+	logger.setLevel(logging.DEBUG)
 	## Handler
 	handler = logging.handlers.SysLogHandler(address = '/dev/log')
 	logger.addHandler(handler)
 	## Format
-    format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    handler.setFormatter(format)
+	format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+	handler.setFormatter(format)
 	
 	# Setup handler for SIGTERM so that we aren't left in a funny state
-	flag = threading.Event()
-	flag.set()
-    def HandleSignalExit(signum, flag, logger=logger):
+	flag = True
+	def HandleSignalExit(signum, flag=flag, logger=logger):
 		logger.info('Exiting on signal %i', signum)
 		
 		# Clear the flag
-		flag.clear()
+		flag = False
 		
 	# Hook in the signal handler - SIGTERM
-    signal.signal(signal.SIGTERM, HandleSignalExit)
+	signal.signal(signal.SIGTERM, HandleSignalExit)
 	
 	# PID file
 	if config['pidFile'] is not None:
@@ -174,58 +174,67 @@ def main(args):
 	logger.info('Starting wxPi.py')
 	
 	# Initialize the internal data state
-	db = initState()
+	db = initState(config)
 	
 	# Setup the various threads
 	threads = []
 	threads.append( RadioMonitor(config, db) )
-	threads.append( BMP085Monitor(config, db) )
-	threads.append( Archiver(config, db) )
+	#threads.append( BMP085Monitor(config, db) )
+	#threads.append( Archiver(config, db) )
 	
 	# Start the threads
 	for t in threads:
 		t.start()
 		time.sleep(1)
 		
+	time.sleep(config['duration'])
+	
 	# State variable to keep up with what has and hasn't been sent
 	tLastUpdate = 0.0
 	
 	# Enter the main loop
-	while flag.isSet():
+	while flag:
 		## Begin the loop
 		t0 = time.time()
 	
 		## Get the latest batch of data
-		t, d = self.db.getData()
+		t, d = db.getData()
 		
 		# Make sure that it is fresh so that we only send the latest and greatest
-		if tData != tLastUpdate:
-			#uploadStatus = wuUploader(self.config['ID'], self.config['PASSWORD'], 
-			#					t, d, archive=self.db, 
-			#					includeIndoor=self.config['includeIndoor'], 
-			#					verbose=self.config['verbose'])
+		if t != tLastUpdate:
+			#uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
+			#					t, d, archive=db, 
+			#					includeIndoor=config['includeIndoor'], 
+			#					verbose=config['verbose'])
 			#					
 			#if uploadStatus:
 			#	tLastUpdate = 1.0*tData
-			wxThreadsLogger.info('Posted data to WUnderground')
+			logger.info('Posted data to WUnderground')
 			config['green'].blink()
 			time.sleep(3)
 			config['green'].blink()
 				
 		## Done
 		t1 = time.time()
-		tStop = self.config['duration'] - (t1-t0)
+		tSleep = config['duration'] - (t1-t0)
 		
+		## Flag check
+		if not flag:
+			break
+				
 		## Sleep
 		time.sleep(tSleep)
 		
 	# Exit
-    logger.info('Finished')	
-    logging.shutdown()
+	for t in threads:
+		t.stop()
+		
+	logger.info('Finished')	
+	logging.shutdown()
 	sys.exit(0)
 
 
 if __name__ == "__main__":
-	daemonize('/dev/null','/dev/null','/tmp/wxPi.stderr')
+	#daemonize('/dev/null','/tmp/wxPi.stdin','/tmp/wxPi.stderr')
 	main(sys.argv[1:])
 	

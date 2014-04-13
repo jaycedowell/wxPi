@@ -25,16 +25,19 @@ class LED(object):
 		self.alive = threading.Event()
 		
 		# Setup
-		if self.pin > 0:			
-			# Export
-			fh = open('/sys/class/gpio/export', 'w')
-			fh.write(str(self.pin))
-			fh.close()
+		if self.pin > 0:
+			pass			
+			## Export
+			#fh = open('/sys/class/gpio/export', 'w')
+			#fh.write(str(self.pin))
+			#fh.flush()
+			#fh.close()
 		
-			# Direction
-			fh = open('/sys/class/gpio/gpio%i/direction' % self.pin, 'w')
-			fh.write('out')
-			fh.close()
+			## Direction
+			#fh = open('/sys/class/gpio/gpio%i/direction' % self.pin, 'w')
+			#fh.write('out')
+			#fh.flush()
+			#fh.close()
 			
 	def on(self):
 		"""
@@ -45,15 +48,15 @@ class LED(object):
 			if self.thread is not None:
 				self._stop()
 				
-			self.lock.acquire()
+			#self.lock.acquire()
 			
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('1')
 			fh.close()
 			
-			self.lock.release()
+			#self.lock.release()
 		
-	def off(pin):
+	def off(self):
 		"""
 		Turn the LED off.
 		"""
@@ -62,13 +65,13 @@ class LED(object):
 			if self.thread is not None:
 				self._stop()
 				
-			self.lock.acquire()
+			#self.lock.acquire()
 			
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('0')
 			fh.close()
 			
-			self.local.relase()
+			#self.lock.release()
 			
 	def blink(self, blinkPeriod=0.25):
 		"""

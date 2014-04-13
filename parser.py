@@ -274,6 +274,7 @@ def parsePacketStream(packets, elevation=0.0, inputDataDict=None, verbose=False)
 			output[key] = value
 
 	# Parse the packet payload and save the output
+	print packets
 	for pType,pPayload in packets:
 		if pType == 'OSV2':
 			valid, sensorName, channel, sensorData = parsePacketv21(pPayload, verbose=verbose)

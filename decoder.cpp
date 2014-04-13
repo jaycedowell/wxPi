@@ -1,7 +1,6 @@
 #include "Python.h"
 #include <iostream>
 #include <stdlib.h>
-#include <time.h>
 #include <errno.h>
 #include <signal.h>
 #include "wiringPi.h"
@@ -40,25 +39,26 @@ static PyObject *callbackFunc = NULL;
 static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	PyObject *output, *bits, *temp, *temp2, *temp2a, *temp2b, *temp3;
 	PyObject *cbf, *arglist, *result;
+	PyGILState_STATE gstate;
 	long inputPin, duration, verbose, tStart;
 	struct sigaction sigact;
 	char message[512];
 	
-	verbose = 0;
-	static char *kwlist[] = {"inputPin", "callback", "verbose", NULL};
-	if( !PyArg_ParseTupleAndKeywords(args, kwds, "i:set_callback|i", kwlist, &inputPin, &cbf, &verbose) ) {
+	verbose = 1;
+	static char *kwlist[] = {"inputPin", "callback", NULL};
+	if( !PyArg_ParseTupleAndKeywords(args, kwds, "iO:set_callback", kwlist, &inputPin, &cbf) ) {
 		PyErr_Format(PyExc_RuntimeError, "Invalid parameters");
 		return NULL;
 	}
 	
 	// Validate the input
-	if (!PyCallable_Check(temp)) {
+	if (!PyCallable_Check(cbf)) {
 		PyErr_SetString(PyExc_TypeError, "callback parameter must be callable");
         return NULL;
     }
     
     // Setup the callback
-	Py_XINCREF(cbf);         	/* Add a reference to new callback */
+    Py_XINCREF(cbf);         	/* Add a reference to new callback */
     Py_XDECREF(callbackFunc);  /* Dispose of previous callback */
     callbackFunc = cbf;       	/* Remember new callback */
 	
@@ -79,8 +79,7 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	sigaction(SIGPIPE, &sigact, NULL);
 	
 	// Go
-	tStart = (long) time(NULL);
-	while ((long) time(NULL) - tStart < duration && !do_exit) {
+	while ( !do_exit ) {
 		//// Check for a message
 		if ( rc->OokAvailable() ) {
 			rc->getOokCode(message);
@@ -89,29 +88,20 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 				cout << message << "\n" << flush;
 			}
 			
-			//// Setup the output list
-			bits = PyList_New(0);
-			
-			temp = PyString_FromString(message);
-			temp2 = PyObject_CallMethod(temp, "split", "(si)", " ", 1);
-			
-			temp2a = PyList_GetItem(temp2, (Py_ssize_t) 0);
-			temp2b = PyList_GetItem(temp2, (Py_ssize_t) 1);
-			temp3 = PyTuple_Pack((Py_ssize_t) 2, temp2a, temp2b);
-			PyList_Append(bits, temp3);
-			
-			Py_DECREF(temp);
-			Py_DECREF(temp2);
-			Py_DECREF(temp3);
+			//temp = PyString_FromString(message);
 			
 			//// Send to the callback
-			arglist = Py_BuildValue("(i)", bits);
-			result = PyObject_CallObject(my_callback, arglist);
-			Py_DECREF(arglist);
+			gstate = PyGILState_Ensure();
+			arglist = Py_BuildValue("(s)", message);
+			result = PyObject_CallObject(callbackFunc, arglist);
 			
 			//// Cleanup
-			Py_DECREF(result);
-			Py_DECREF(bits);
+			PyGILState_Release(gstate);
+			//Py_DECREF(result);
+			Py_DECREF(arglist);
+			//Py_DECREF(temp);
+			
+			
 		}
 		
 		//// Wait a bit (~1 ms)
