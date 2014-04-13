@@ -155,17 +155,6 @@ def main(args):
 	format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 	handler.setFormatter(format)
 	
-	# Setup handler for SIGTERM so that we aren't left in a funny state
-	flag = True
-	def HandleSignalExit(signum, flag=flag, logger=logger):
-		logger.info('Exiting on signal %i', signum)
-		
-		# Clear the flag
-		flag = False
-		
-	# Hook in the signal handler - SIGTERM
-	signal.signal(signal.SIGTERM, HandleSignalExit)
-	
 	# PID file
 	if config['pidFile'] is not None:
 		fh = open(config['pidFile'], 'w')
@@ -181,49 +170,34 @@ def main(args):
 	threads.append( RadioMonitor(config, db) )
 	#threads.append( BMP085Monitor(config, db) )
 	#threads.append( Archiver(config, db) )
+	#threads.append( Uploader(config, db) )
 	
 	# Start the threads
 	for t in threads:
 		t.start()
 		time.sleep(1)
 		
-	time.sleep(config['duration'])
-	
-	# State variable to keep up with what has and hasn't been sent
-	tLastUpdate = 0.0
+	# Setup handler for SIGTERM so that we aren't left in a funny state
+	def HandleSignalExit(signum, threads, logger=logger):
+		logger.info('Exiting on signal %i', signum)
+		
+		# Stop all threads
+		for t in threads:
+			t.stop()
+			
+	# Hook in the signal handler - SIGTERM
+	signal.signal(signal.SIGTERM, HandleSignalExit)
 	
 	# Enter the main loop
-	while flag:
-		## Begin the loop
-		t0 = time.time()
-	
-		## Get the latest batch of data
-		t, d = db.getData()
-		
-		# Make sure that it is fresh so that we only send the latest and greatest
-		if t != tLastUpdate:
-			#uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
-			#					t, d, archive=db, 
-			#					includeIndoor=config['includeIndoor'], 
-			#					verbose=config['verbose'])
-			#					
-			#if uploadStatus:
-			#	tLastUpdate = 1.0*tData
-			logger.info('Posted data to WUnderground')
-			config['green'].blink()
-			time.sleep(3)
-			config['green'].blink()
-				
-		## Done
-		t1 = time.time()
-		tSleep = config['duration'] - (t1-t0)
-		
-		## Flag check
-		if not flag:
+	while True:
+		stopped = False
+		for t in threads:
+			if not t.alive.isSet():
+				stopped = True
+				break
+		if stopped:
 			break
-				
-		## Sleep
-		time.sleep(tSleep)
+		time.sleep(1)
 		
 	# Exit
 	for t in threads:

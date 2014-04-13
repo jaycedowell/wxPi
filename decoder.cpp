@@ -97,7 +97,7 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 			
 			//// Cleanup
 			PyGILState_Release(gstate);
-			//Py_DECREF(result);
+			Py_DECREF(result);
 			Py_DECREF(arglist);
 			//Py_DECREF(temp);
 			

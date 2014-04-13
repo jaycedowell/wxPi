@@ -13,7 +13,7 @@ from sensors.bmpBackend import BMP085
 
 __version__ = "0.1"
 __revision__ = "$Rev$"
-__all__ = ["initState", "RadioMonitor", "BMP085Monitor", "Archiver", "__version__", "__revision__", "__all__"]
+__all__ = ["initState", "RadioMonitor", "BMP085Monitor", "Archiver", "Uploader", "__version__", "__revision__", "__all__"]
 
 
 # The current weather data state and its lock
@@ -71,7 +71,6 @@ class RadioMonitor(object):
 		self.thread.setDaemon(1)
 		self.alive.set()
 		self.thread.start()
-		print "Here"
 			
 	def stop(self):
 		"""
@@ -97,23 +96,17 @@ class RadioMonitor(object):
 		"""
 		
 		## Log this packet in debugging mode
-		print 'II', packets
 		logging.debug("Got packets: %s" % str(packets))
 		
 		## Acquire the lock on the current state
 		stateLock.acquire()
-		
-		print "Here2"
 
 		### Turn on the red LED
 		#self.config['red'].on()
 		
 		## Parse the available data
 		tData = time.time()
-		print "Test"
-		packets = tuple(packets.split(None, 1))
-		packets = [packets,]
-		print packets
+		packets = [tuple(packets.split(None, 1)),]
 		sensorData = parsePacketStream(packets, elevation=self.config['elevation'], 
 										inputDataDict=sensorData, 
 										verbose=self.config['verbose'])
@@ -272,5 +265,76 @@ class Archiver(object):
 			t1 = time.time()
 			tSleep = self.config['duration'] - (t1-t0)
 			
+			## Sleep
+			time.sleep(tSleep)
+
+
+class Uploader(object):
+	def __init__(self, config, db):
+		# Basic configuration
+		self.config = config
+		self.db = db
+		
+		# Thread information
+		self.thread = None
+		self.alive = threading.Event()
+		
+	def start(self):
+		"""
+		Start the WUnderground uploader.
+		"""
+		
+		if self.thread is not None:
+			self.stop()
+			       
+		self.thread = threading.Thread(target=self.run, name='wuu')
+		self.thread.setDaemon(1)
+		self.alive.set()
+		self.thread.start()
+		
+	def stop(self):
+		"""
+		Stop the WUnderground uploader.
+		"""
+		
+		if self.thread is not None:
+			self.alive.clear()
+			self.thread.join()
+			self.thread = None
+			
+	def run(self):
+		"""
+		Post the latest weather data to WUnderground.
+		"""
+		
+		# State variable to keep up with what has and hasn't been sent
+		tLastUpdate = 0.0
+		
+		while self.alive.isSet():
+			## Get the latest batch of data
+			t, d = db.getData()
+		
+			# Make sure that it is fresh so that we only send the latest and greatest
+			if t != tLastUpdate:
+				#uploadStatus = wuUploader(self.config['ID'], self.config['PASSWORD'], 
+				#					t, d, archive=self.db, 
+				#					includeIndoor=self.config['includeIndoor'], 
+				#					verbose=self.config['verbose'])
+				#					
+				#if uploadStatus:
+				#	tLastUpdate = 1.0*tData
+				
+				logger.info('Posted data to WUnderground')
+				self.config['green'].blink()
+				time.sleep(3)
+				self.config['green'].blink()
+				
+			## Done
+			t1 = time.time()
+			tSleep = self.config['duration'] - (t1-t0)
+		
+			if not self.alive.isSet():
+				break
+				
 			## Sleep
 			time.sleep(tSleep)
