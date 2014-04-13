@@ -94,7 +94,7 @@ def main(args):
 	config = loadConfig(CONFIG_FILE)
 	
 	# Setup the logging
-	logger = logging.getLogger(__main__)
+	logger = logging.getLogger(__name__)
 	logger.setLevel(logging.INFO)
 	
 	handler = logging.handlers.SysLogHandler(address = '/dev/log')
@@ -126,7 +126,7 @@ def main(args):
 		
 		# Record some data and extract the bits on-the-fly
 		ledOn(config['redPin'])
-		tData = time.time() + config'duration'])/2
+		tData = time.time() + int(config['duration'])/2
 		packets = read433(config['radioPin'], int(config['duration'])/2, verbose=config['verbose'])
 		ledOff(config['redPin'])
 		
@@ -170,18 +170,19 @@ def main(args):
 			time.sleep(3)
 			blinkOff(ledColor)
 			ledOff(ledColor)
+		else:
+			ledOff(config['yellowPin'])
 			
 		# Check the clearToSend state
 		if not clearToSend:
 			if pollCounter > 3 and len(sensorData.keys()) > 0:
 				clearToSend = True
-				
+			pollCounter += 1
+			
 		# End the loop and sleep
 		t1 = time.time()
 		tSleep = config['duration'] - (t1-t0)
 		time.sleep(tSleep)
-		
-		pollCounter += 1
 
 
 if __name__ == "__main__":

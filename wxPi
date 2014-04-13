@@ -2,10 +2,10 @@
 
 ### BEGIN INIT INFO
 # Provides:        wxPi
-# Required-Start:  none
-# Required-Stop:   none
+# Required-Start:  $syslog
+# Required-Stop:   $syslog
 # Default-Start:   2 3 4 5
-# Default-Stop:    1
+# Default-Stop:    
 # Short-Description: Start the wxPi weather logging software
 ### END INIT INFO
 
