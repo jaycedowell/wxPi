@@ -110,7 +110,7 @@ Options:
 
 def parseOptions(args):
 	config = {}
-	config['configFile'] = CONFIG_FILE)
+	config['configFile'] = CONFIG_FILE
 	config['pidFile'] = None
 
 	try:
@@ -151,19 +151,19 @@ def main(args):
 	## Basic
 	logger = logging.getLogger(__name__)
 	logger.setLevel(logging.INFO)
-	## Format
-	format = formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-	logger.setFormatter(format)
 	## Handler
 	handler = logging.handlers.SysLogHandler(address = '/dev/log')
 	logger.addHandler(handler)
+	## Format
+        format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(format)
 	
 	# PID file
 	if config['pidFile'] is not None:
 		fh = open(config['pidFile'], 'w')
 		fh.write("%i\n" % os.getpid())
 		fh.close()
-	logger.info('Starting wxPi.py with PID %i' % os.getpid())
+	logger.info('Starting wxPi.py')
 	
 	# Open the database and read in the most recent state.  If the database doesn't exist
 	# or the state is stale we need to poll the 
@@ -176,7 +176,7 @@ def main(args):
 	except RuntimeError, e:
 		db = None
 		tData, sensorData = time.time(), {}
-		logger.error('
+		logger.error(str(e))
 		
 	clearToSend = True
 	if len(sensorData.keys()) == 0:
@@ -239,10 +239,10 @@ def main(args):
 			
 		# Check the clearToSend state
 		if not clearToSend:
+			pollCounter += 1
 			if pollCounter > 3 and len(sensorData.keys()) > 0:
 				clearToSend = True
-			pollCounter += 1
-			
+				
 		# End the loop and sleep
 		t1 = time.time()
 		tSleep = config['duration'] - (t1-t0)
@@ -250,6 +250,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-	daemonize('/dev/null','/tmp/wxPi.stdout','/tmp/wxPi.stderr')
+	daemonize('/dev/null','/dev/null','/tmp/wxPi.stderr')
 	main(sys.argv[1:])
 	
