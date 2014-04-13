@@ -261,7 +261,7 @@ def generateWeatherReport(output, includeIndoor=True):
 	return wxReport
 
 
-def wuUploader(id, password, data, archive=None, includeIndoor=False, verbose=False):
+def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=False, verbose=False):
 	"""
 	Upload a collection of data to the WUnderground PWD service.
 	"""
@@ -277,20 +277,20 @@ def wuUploader(id, password, data, archive=None, includeIndoor=False, verbose=Fa
 	pwsData['ID'] = id
 	pwsData['PASSWORD'] = password
 	pwsData['softwaretype'] = "wxPi"
-	pwsData['dateutc'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+	pwsData['dateutc'] = datetime.utcfromtimestamp(tData).strftime("%Y-%m-%d %H:%M:%S")
 	pwsData['action'] = "updateraw"
 	
 	## Add in the outdoor temperature/humidity values
 	try:
-		pwsData['tempf'] = temp_C2F( data['temperature'] )
-		pwsData['humidity'] = data['humidity']
-		pwsData['dewptf'] = temp_C2F( data['dewpoint'] )
+		pwsData['tempf'] = temp_C2F( sensorData['temperature'] )
+		pwsData['humidity'] = sensorData['humidity']
+		pwsData['dewptf'] = temp_C2F( sensorData['dewpoint'] )
 	except KeyError:
 		pass
 	j = 2
 	for i in xrange(4):
 		try:
-			t = data['altTemperature'][i]
+			t = sensorData['altTemperature'][i]
 			if t is None:
 				continue
 			pwsData['temp%if' % j] = temp_C2F( t )
@@ -298,26 +298,26 @@ def wuUploader(id, password, data, archive=None, includeIndoor=False, verbose=Fa
 			pass
 			
 	## Add in the barometric pressure
-	pwsData['baromin'] = pressure_mb2inHg( data['pressure'] )
+	pwsData['baromin'] = pressure_mb2inHg( sensorData['pressure'] )
 	
 	## Add in the wind values
 	try:
-		pwsData['windspeedmph'] = speed_ms2mph( data['average'] )
-		pwsData['windgustmph'] = speed_ms2mph( data['gust'] )
-		pwsData['winddir'] = data['direction']
+		pwsData['windspeedmph'] = speed_ms2mph( sensorData['average'] )
+		pwsData['windgustmph'] = speed_ms2mph( sensorData['gust'] )
+		pwsData['winddir'] = sensorData['direction']
 	except KeyError:
 		pass
 		
 	## Add in the UV index
 	try:
-		if data['uvIndex'] >= 0:
-			pwsData['UV'] = data['uvIndex']
+		if sensorData['uvIndex'] >= 0:
+			pwsData['UV'] = sensorData['uvIndex']
 	except KeyError:
 		pass
 		
 	## Add in the rain values
 	if archive is not None:
-		### Ouch...
+		### Ouch... there has to be a better way to do this
 		tUTCMidnight = (int(time.time()) / 86400) * 86400
 		localOffset = int(round(float(datetime.utcnow().strftime("%s.%f")) - time.time(), 1))
 		tLocalMidnight = tUTCMidnight + localOffset
@@ -325,17 +325,17 @@ def wuUploader(id, password, data, archive=None, includeIndoor=False, verbose=Fa
 			tLocalMidnight -= 86400
 			
 		### Get the rainfall from an hour ago and from local midnight
-		ts, entry = archive.getData(age=3660)
+		ts, entry = archive.getData(age=3630)
 		rainHour = entry['rainfall']
-		ts, entry  = archive.getData(age=time.time()-tLocalMidnight+60)
+		ts, entry  = archive.getData(age=time.time()-tLocalMidnight+30)
 		rainDay = entry['rainfall']
 		
 		### Calculate
 		try:
-			rainHour = data['rainfall'] - rainHour
+			rainHour = sensorData['rainfall'] - rainHour
 			if rainHour < 0:
 				rainHour = 0.0
-			rainDay = data['rainfall'] - rainDay
+			rainDay = sensorData['rainfall'] - rainDay
 			if rainDay < 0:
 				rainDay = 0.0
 			pwsData['rainin'] = length_mm2in( rainHour )
@@ -346,8 +346,8 @@ def wuUploader(id, password, data, archive=None, includeIndoor=False, verbose=Fa
 	## Add in the indoor values if requested
 	if includeIndoor:
 		try:
-			pwsData['indoortempf'] =  temp_C2F( data['indoorTemperature'] )
-			pwsData['indoorhumidity'] = data['indoorHumidity']
+			pwsData['indoortempf'] =  temp_C2F( sensorData['indoorTemperature'] )
+			pwsData['indoorhumidity'] = sensorData['indoorHumidity']
 		except KeyError:
 			pass
 			

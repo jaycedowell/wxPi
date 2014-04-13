@@ -31,7 +31,7 @@ def loadConfig(filename):
 	# Initial values
 	config = {'verbose': False,
 			  'radioPin': 18, 
-			  'duration': 90.0, 
+			  'duration': 60.0, 
 			  'includeIndoor': False, 
 			  'elevation': 0.0, 
 			  'enableBMP085': True, 

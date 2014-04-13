@@ -91,59 +91,89 @@ def main(args):
 	# Read in the configuration file
 	config = loadConfig(CONFIG_FILE)
 	
-	# Record some data and extract the bits on-the-fly
-	ledOn(config['redPin'])
-	packets = read433(config['radioPin'], int(round(config['duration'])), 
-				verbose=config['verbose'])
-	ledOff(config['redPin'])
-	
-	# Read in the most recent state
-	ledOn(config['yellowPin'])
+	# Open the database and read in the most recent state.  If the database doesn't exist
+	# or the state is stale we need to poll the 
 	try:
 		db = Archive()
-		tLast, output = db.getData()
+		tData, sensorData = db.getData()
+		if time.time() - tData > 2*config['duration']:
+			sensorData = {}
+			
 	except RuntimeError, e:
+		db = None
+		tData, sensorData = time.time(), {}
+		
 		print "WARNING: %s" % str(e)
 		
-		db = None
-		tLast, output = time.time(), {}
+	clearToSend = True
+	if len(sensorData.keys()) == 0:
+		clearToSend = False
 		
-	# Find the packets and save the output
-	output = parsePacketStream(packets, elevation=config['elevation'], inputDataDict=output, verbose=config['verbose'])
-	ledOff(config['yellowPin'])	
-
-	# Poll the BMP085/180
-	if config['enableBMP085']:
+	# Enter the main loop
+	pollCounter = 0
+	while True:
+		# Begin the loop
+		t0 = time.time()
+		
+		# Record some data and extract the bits on-the-fly
 		ledOn(config['redPin'])
-		ps = BMP085(address=0x77, mode=3)
-		output['pressure'] = ps.readPressure() / 100.0 
-		output['pressure'] = computeSeaLevelPressure(output['pressure'], config['elevation'])
-		if 'indoorHumidity' in output.keys():
-			output['indoorTemperature'] = ps.readTemperature()
-			output['indoorDewpoint'] = computeDewPoint(output['indoorTemperature'], output['indoorHumidity'])
+		tData = time.time() + config'duration'])/2
+		packets = read433(config['radioPin'], int(config['duration'])/2, verbose=config['verbose'])
 		ledOff(config['redPin'])
-	
-	# Save to the database
-	ledOn(config['yellowPin'])
-	if db is not None:
-		db.writeData(time.time(), output)
 		
-	# Upload
-	status = wuUploader(config['ID'], config['PASSWORD'], output, archive=db, 
-				includeIndoor=config['includeIndoor'], verbose=config['verbose'])
-	ledOff(config['yellowPin'])
+		# Find the packets and save the output
+		ledOn(config['yellowPin'])
+		sensorData = parsePacketStream(packets, elevation=config['elevation'], inputDataDict=sensorData, verbose=config['verbose'])
+		ledOff(config['yellowPin'])	
+		
+		# Poll the BMP085/180 for pressure and indoor temperature
+		if config['enableBMP085']:
+			ledOn(config['redPin'])
+			ps = BMP085(address=0x77, mode=3)
+			sensorData['pressure'] = ps.readPressure() / 100.0 
+			sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], config['elevation'])
+			if 'indoorHumidity' in sensorData.keys():
+				sensorData['indoorTemperature'] = ps.readTemperature()
+				sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
+			ledOff(config['redPin'])
 	
-	# Report status of upload...
-	if status:
-		ledColor = config['greenPin']
-	else:
-		ledColor = config['redPin']
-	# ... with an LED
-	blinkOn(ledColor)
-	time.sleep(3)
-	blinkOff(ledColor)
-	ledOff(ledColor)
+		# Save to the database
+		ledOn(config['yellowPin'])
+		if db is not None:
+			if clearToSend:
+				db.writeData(tData, sensorData)
+			
+		# Upload
+		if clearToSend:
+			uploadStatus = wuUploader(config['ID'], config['PASSWORD'], tData, sensorData, archive=db, 
+										includeIndoor=config['includeIndoor'], verbose=config['verbose'])
+			ledOff(config['yellowPin'])
+	
+			# Report status of upload...
+			if uploadStatus:
+				ledColor = config['greenPin']
+			else:
+				ledColor = config['redPin']
+			# ... with an LED
+			blinkOn(ledColor)
+			time.sleep(3)
+			blinkOff(ledColor)
+			ledOff(ledColor)
+			
+		# Check the clearToSend state
+		if not clearToSend:
+			if pollCounter > 3 and len(sensorData.keys()) > 0:
+				clearToSend = True
+				
+		# End the loop and sleep
+		t1 = time.time()
+		tSleep = config['duration'] - (t1-t0)
+		time.sleep(tSleep)
+		
+		pollCounter += 1
 
 
 if __name__ == "__main__":
+	daemonize('/dev/null','/tmp/wxPi.stdout','/tmp/wxPi.stderr')
 	main(sys.argv[1:])
+	

@@ -21,8 +21,8 @@ PASSWORD: Your_Password_Here
 # Radio input GPIO pin
 #radioPin: 18
 
-# Recording duration in seconds
-#duration: 90
+# Update interval in seconds - data is recorded for half this time
+#duration: 60
 
 # Enable reading a BMP085/BMP180 sensor over I2C
 #enableBMP085: True
