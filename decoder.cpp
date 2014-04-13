@@ -25,6 +25,13 @@ static void sighandler(int signum)
 }
 
 
+/* 
+   callbackFunction - Function for getting data out of read433 and back into Python
+*/
+
+static PyObject *callbackFunc = NULL;
+
+
 /*
   read433 - Function for reading directly from an RTL-SDR and returning a list of
   Manchester decoded bits.
@@ -32,23 +39,28 @@ static void sighandler(int signum)
 
 static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	PyObject *output, *bits, *temp, *temp2, *temp2a, *temp2b, *temp3;
-	int i;
+	PyObject *cbf, *arglist, *result;
 	long inputPin, duration, verbose, tStart;
 	struct sigaction sigact;
 	char message[512];
 	
 	verbose = 0;
-	static char *kwlist[] = {"inputPin", "duration", "verbose", NULL};
-	if( !PyArg_ParseTupleAndKeywords(args, kwds, "ii|i", kwlist, &inputPin, &duration, &verbose) ) {
+	static char *kwlist[] = {"inputPin", "callback", "verbose", NULL};
+	if( !PyArg_ParseTupleAndKeywords(args, kwds, "i:set_callback|i", kwlist, &inputPin, &cbf, &verbose) ) {
 		PyErr_Format(PyExc_RuntimeError, "Invalid parameters");
 		return NULL;
 	}
 	
 	// Validate the input
-	if( duration <= 0 ) {
-		PyErr_Format(PyExc_ValueError, "Duration value must be greater than zero");
-		return NULL;
-	}
+	if (!PyCallable_Check(temp)) {
+		PyErr_SetString(PyExc_TypeError, "callback parameter must be callable");
+        return NULL;
+    }
+    
+    // Setup the callback
+	Py_XINCREF(cbf);         	/* Add a reference to new callback */
+    Py_XDECREF(callbackFunc);  /* Dispose of previous callback */
+    callbackFunc = cbf;       	/* Remember new callback */
 	
 	// Setup the 433 MHz receiver
 	if(wiringPiSetupSys() == -1) {
@@ -65,9 +77,6 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	sigaction(SIGTERM, &sigact, NULL);
 	sigaction(SIGQUIT, &sigact, NULL);
 	sigaction(SIGPIPE, &sigact, NULL);
-   	
-	// Setup the output list
-	bits = PyList_New(0);
 	
 	// Go
 	tStart = (long) time(NULL);
@@ -80,6 +89,9 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 				cout << message << "\n" << flush;
 			}
 			
+			//// Setup the output list
+			bits = PyList_New(0);
+			
 			temp = PyString_FromString(message);
 			temp2 = PyObject_CallMethod(temp, "split", "(si)", " ", 1);
 			
@@ -91,6 +103,15 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 			Py_DECREF(temp);
 			Py_DECREF(temp2);
 			Py_DECREF(temp3);
+			
+			//// Send to the callback
+			arglist = Py_BuildValue("(i)", bits);
+			result = PyObject_CallObject(my_callback, arglist);
+			Py_DECREF(arglist);
+			
+			//// Cleanup
+			Py_DECREF(result);
+			Py_DECREF(bits);
 		}
 		
 		//// Wait a bit (~1 ms)

@@ -5,142 +5,130 @@ Module for controlling LEDs hooked into the GPIO ports on a Rasberry Pi.
 import time
 import threading
 
-__version__ = '0.2'
-__all__ = ['setOutput', 'on', 'off', 'blinkOn', 'blinkOff', '__version__', '__all__']
+__version__ = '0.3'
+__all__ = ['LED', '__version__', '__all__']
 
 
-# Internal state dictionary used by the blinkOn/blinkOff functions
-_state = {}
 
-
-def setOutput(pin):
+class LED(object):
 	"""
-	Export the specified GPIO pin and set it to output.
+	Class for controlling an LED via GPIO.
 	"""
 	
-	pin = int(pin)
-	if pin > 0:
-		# Export
-		fh = open('/sys/class/gpio/export', 'w')
-		fh.write(str(pine))
-		fh.close()
-		
-		# Direction
-		fh = open('/sys/class/gpio/gpio%i/direction' % pin, 'w')
-		fh.write('out')
-		fh.close()
-
-
-def on(pin):
-	"""
-	Set the LED on the specified pin to the 'on' state.
-	"""
-	
-	pin = int(pin)
-	if pin > 0:
-		fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
-		fh.write('1')
-		fh.close()
-
-
-def off(pin):
-	"""
-	Set the LED on the specified pin to the 'off' state.
-	"""
-	
-	pin = int(pin)
-	if pin > 0:
-		fh = open('/sys/class/gpio/gpio%i/value' % pin, 'w')
-		fh.write('0')
-		fh.close()
-
-
-class _blink(object):
-	"""
-	Class that uses a seperate control thread to blink a GPIO-attached
-	LED on and off.
-	"""	
-
-	def __init__(self, pin, blinkPeriod=0.25):
-		"""
-		Initialize the object with the GPIO pin number and the duration
-		of the on and off states in seconds.
-		"""
-		
+	def __init__(self, pin):
+		# GPIO pin
 		self.pin = int(pin)
-		self.period = float(blinkPeriod)
 		
+		# Thread information for blinking
 		self.thread = None
+		self.lock = threading.Semaphore()
 		self.alive = threading.Event()
 		
-	def start(self):
-		"""
-		Start the blinking.
-		"""
+		# Setup
+		if self.pin > 0:			
+			# Export
+			fh = open('/sys/class/gpio/export', 'w')
+			fh.write(str(self.pin))
+			fh.close()
 		
-		if self.thread is not None:
-			self.stop()
-			       
-		self.thread = threading.Thread(target=self.cycle, name='blink%i' % self.pin)
-		self.thread.setDaemon(1)
-		self.alive.set()
-		self.thread.start()
-		
-	def stop(self):
-		"""
-		Stop the blinking.
-		"""
-		
-		if self.thread is not None:
-			self.alive.clear()
-			self.thread.join()
-			self.thread = None
-			off(self.pin)
+			# Direction
+			fh = open('/sys/class/gpio/gpio%i/direction' % self.pin, 'w')
+			fh.write('out')
+			fh.close()
 			
-	def cycle(self):
+	def on(self):
 		"""
-		Background function for controlling the LED's state.
+		Turn the LED on.
+		"""
+		
+		if self.pin > 0:
+			if self.thread is not None:
+				self._stop()
+				
+			self.lock.acquire()
+			
+			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+			fh.write('1')
+			fh.close()
+			
+			self.lock.release()
+		
+	def off(pin):
+		"""
+		Turn the LED off.
+		"""
+	
+		if self.pin > 0:
+			if self.thread is not None:
+				self._stop()
+				
+			self.lock.acquire()
+			
+			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+			fh.write('0')
+			fh.close()
+			
+			self.local.relase()
+			
+	def blink(self, blinkPeriod=0.25):
+		"""
+		Set the LED to blinking with the specified interval in seconds.   This function
+		starts the LED blinking if it isn't already and stops it if it is.
+		"""
+		
+		self.period = float(blinkPeriod)
+		
+		if self.thread is not None:
+			self._stop()
+		else:
+			self._start()
+			
+	def _start(self):
+		"""
+		Start the blinking thread.
+		"""
+		
+		if self.pin > 0:
+			if self.thread is None:
+				self.thread = threading.Thread(target=self._cycle, name='blink%i' % self.pin)
+				self.thread.setDaemon(1)
+				self.alive.set()
+				self.thread.start()
+				
+	def _stop(self):
+		"""
+		Stop the blinking thread.
+		"""
+		
+		if self.pin > 0:
+			if self.thread is not None:
+				self.alive.clear()
+				self.thread.join()
+				self.thread = None
+				self.off()
+				
+	def _cycle(self):
+		"""
+		Background function for controlling the LED's blinking.
 		"""
 		
 		while self.alive.isSet():
-			on(self.pin)
+			# On
+			self.lock.acquire()
+			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+			fh.write('1')
+			fh.close()
+			self.lock.release()
+			
 			if self.alive.isSet():
 				time.sleep(self.period)
-			off(self.pin)
+				
+			# Off
+			self.lock.acquire()
+			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+			fh.write('0')
+			fh.close()
+			self.lock.release()
+			
 			if self.alive.isSet():
 				time.sleep(self.period)
-
-
-def blinkOn(pin, blinkPeriod=0.25):
-	"""
-	Start the LED on the specified GPIO blinking with the provided cadence.
-	"""
-	
-	# Pin
-	pin = int(pin)
-	if pin > 0:
-		# Are we already blinking?
-		try:
-			_state[pin].stop()
-		except KeyError:
-			pass
-		
-		# Start
-		_state[pin] = _blink(pin, blinkPeriod=blinkPeriod)
-		_state[pin].start()
-
-
-def blinkOff(pin):
-	"""
-	Stop the LED on the specified GPIO from blinking.
-	"""
-	
-	# Pin
-	pin = int(pin)
-	if pin > 0:
-		# Are we already blinking?
-		try:
-			_state[pin].stop()
-			del _state[pin]
-		except KeyError:
-			pass

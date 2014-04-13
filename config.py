@@ -7,7 +7,9 @@ File for dealing with the configuration of wxPi.py.
 import os
 import re
 
-__version__ = '0.1'
+from led import LED
+
+__version__ = '0.2'
 __all__ = ['CONFIG_FILE', 'loadConfig', '__version__', '__all__']
 
 
@@ -54,22 +56,32 @@ def loadConfig(filename):
 			## Update the dictionary
 			key, value = configRE.split(line, 1)
 			config[key] = value
-		fh.close()
-		
-		# Integer type conversions
-		for key in ('radioPin', 'redPin', 'yellowPin', 'greenPin'):
-			config[key] = int(config[key])
-			
-		# Float type conversion
-		for key in ('duration', 'elevation'):
-			config[key] = float(config[key])
-			
-		# Boolean type conversions
-		for key in ('verbose', 'includeIndoor', 'enableBMP085'):
-			config[key] = bool(config[key])
 			
 	except IOError:
 		pass
+	finally:
+		fh.close()
 		
+	# Convert the values as needed
+	## Integer type conversions
+	for key in ('radioPin', 'redPin', 'yellowPin', 'greenPin'):
+		config[key] = int(config[key])	
+	## Float type conversion
+	for key in ('duration', 'elevation'):
+		config[key] = float(config[key])	
+	## Boolean type conversions
+	for key in ('verbose', 'includeIndoor', 'enableBMP085'):
+		config[key] = bool(config[key])
+		
+	# Create instances for the LEDs
+	config['red'] = LED(config['redPin'])
+	config['yellow'] = LED(config['yellowPin'])
+	config['green'] = LED(config['greenPin'])
+	
+	# Remove the LED pins since we have LED instances now
+	del config['redPin']
+	del config['yellowPin']
+	del config['greenPin']
+	
 	# Done
 	return config

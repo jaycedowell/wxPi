@@ -12,17 +12,13 @@ import os
 import sys
 import time
 import getopt
+import signal
 import logging
 import logging.handlers
+import threading
 
 from config import CONFIG_FILE, loadConfig
-from database import Archive
-from decoder import read433
-from parser import parsePacketStream
-from utils import computeDewPoint, computeSeaLevelPressure, generateWeatherReport, wuUploader
-
-from led import on as ledOn, off as ledOff, blinkOn, blinkOff
-from sensors.bmpBackend import BMP085
+from utils import wuUploader
 
 """
 This module is used to fork the current process into a daemon.
@@ -155,8 +151,20 @@ def main(args):
 	handler = logging.handlers.SysLogHandler(address = '/dev/log')
 	logger.addHandler(handler)
 	## Format
-        format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-        handler.setFormatter(format)
+    format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    handler.setFormatter(format)
+	
+	# Setup handler for SIGTERM so that we aren't left in a funny state
+	flag = threading.Event()
+	flag.set()
+    def HandleSignalExit(signum, flag, logger=logger):
+		logger.info('Exiting on signal %i', signum)
+		
+		# Clear the flag
+		flag.clear()
+		
+	# Hook in the signal handler - SIGTERM
+    signal.signal(signal.SIGTERM, HandleSignalExit)
 	
 	# PID file
 	if config['pidFile'] is not None:
@@ -165,88 +173,56 @@ def main(args):
 		fh.close()
 	logger.info('Starting wxPi.py')
 	
-	# Open the database and read in the most recent state.  If the database doesn't exist
-	# or the state is stale we need to poll the 
-	try:
-		db = Archive()
-		tData, sensorData = db.getData()
-		if time.time() - tData > 2*config['duration']:
-			sensorData = {}
-			
-	except RuntimeError, e:
-		db = None
-		tData, sensorData = time.time(), {}
-		logger.error(str(e))
+	# Initialize the internal data state
+	db = initState()
+	
+	# Setup the various threads
+	threads = []
+	threads.append( RadioMonitor(config, db) )
+	threads.append( BMP085Monitor(config, db) )
+	threads.append( Archiver(config, db) )
+	
+	# Start the threads
+	for t in threads:
+		t.start()
+		time.sleep(1)
 		
-	clearToSend = True
-	if len(sensorData.keys()) == 0:
-		clearToSend = False
-		
+	# State variable to keep up with what has and hasn't been sent
+	tLastUpdate = 0.0
+	
 	# Enter the main loop
-	pollCounter = 0
-	while True:
-		# Begin the loop
+	while flag.isSet():
+		## Begin the loop
 		t0 = time.time()
-		
-		# Record some data and extract the bits on-the-fly
-		ledOn(config['redPin'])
-		tData = time.time() + int(config['duration'])/2
-		packets = read433(config['radioPin'], int(config['duration'])/2, verbose=config['verbose'])
-		ledOff(config['redPin'])
-		
-		# Find the packets and save the output
-		ledOn(config['yellowPin'])
-		sensorData = parsePacketStream(packets, elevation=config['elevation'], inputDataDict=sensorData, verbose=config['verbose'])
-		ledOff(config['yellowPin'])	
-		
-		# Poll the BMP085/180 for pressure and indoor temperature
-		if config['enableBMP085']:
-			ledOn(config['redPin'])
-			ps = BMP085(address=0x77, mode=3)
-			sensorData['pressure'] = ps.readPressure() / 100.0 
-			sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], config['elevation'])
-			if 'indoorHumidity' in sensorData.keys():
-				sensorData['indoorTemperature'] = ps.readTemperature()
-				sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
-			ledOff(config['redPin'])
 	
-		# Save to the database
-		ledOn(config['yellowPin'])
-		if db is not None:
-			if clearToSend:
-				db.writeData(tData, sensorData)
-			
-		# Upload
-		if clearToSend:
-			uploadStatus = wuUploader(config['ID'], config['PASSWORD'], tData, sensorData, archive=db, 
-										includeIndoor=config['includeIndoor'], verbose=config['verbose'])
-			ledOff(config['yellowPin'])
-	
-			# Report status of upload...
-			if uploadStatus:
-				ledColor = config['greenPin']
-				logger.info('Posted weather data to WUnderground')
-			else:
-				ledColor = config['redPin']
-				logger.error('Failed to post weather data to WUnderground')
-			# ... with an LED
-			blinkOn(ledColor)
+		## Get the latest batch of data
+		t, d = self.db.getData()
+		
+		# Make sure that it is fresh so that we only send the latest and greatest
+		if tData != tLastUpdate:
+			#uploadStatus = wuUploader(self.config['ID'], self.config['PASSWORD'], 
+			#					t, d, archive=self.db, 
+			#					includeIndoor=self.config['includeIndoor'], 
+			#					verbose=self.config['verbose'])
+			#					
+			#if uploadStatus:
+			#	tLastUpdate = 1.0*tData
+			wxThreadsLogger.info('Posted data to WUnderground')
+			config['green'].blink()
 			time.sleep(3)
-			blinkOff(ledColor)
-			ledOff(ledColor)
-		else:
-			ledOff(config['yellowPin'])
-			
-		# Check the clearToSend state
-		if not clearToSend:
-			pollCounter += 1
-			if pollCounter > 3 and len(sensorData.keys()) > 0:
-				clearToSend = True
+			config['green'].blink()
 				
-		# End the loop and sleep
+		## Done
 		t1 = time.time()
-		tSleep = config['duration'] - (t1-t0)
+		tStop = self.config['duration'] - (t1-t0)
+		
+		## Sleep
 		time.sleep(tSleep)
+		
+	# Exit
+    logger.info('Finished')	
+    logging.shutdown()
+	sys.exit(0)
 
 
 if __name__ == "__main__":
