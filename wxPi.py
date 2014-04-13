@@ -11,6 +11,7 @@ This script takes no arguments.
 import os
 import sys
 import time
+import getopt
 import logging
 import logging.handlers
 
@@ -89,16 +90,80 @@ def daemonize(stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
 	os.dup2(se.fileno(), sys.stderr.fileno())
 
 
+def usage(exitCode=None):
+	print """wxPi.py Read data from a v2 Oregon Scientific weather station and post the
+data to WUnderground.
+
+Usage: wxPi.py [OPTIONS]
+
+Options:
+-h, --help                  Display this help information
+-c, --config-file           Path to configuration file
+-p, --pid-file              File to write the current PID to
+"""
+
+	if exitCode is not None:
+		sys.exit(exitCode)
+	else:
+		return True
+
+
+def parseOptions(args):
+	config = {}
+	config['configFile'] = CONFIG_FILE)
+	config['pidFile'] = None
+
+	try:
+		opts, args = getopt.getopt(args, "hc:p:", ["help", "config-file=", "pid-file="])
+	except getopt.GetoptError, err:
+		# Print help information and exit:
+		print str(err) # will print something like "option -a not recognized"
+		usage(exitCode=2)
+	
+	# Work through opts
+	for opt, value in opts:
+		if opt in ('-h', '--help'):
+			usage(exitCode=0)
+		elif opt in ('-c', '--config-file'):
+			config['configFile'] = str(value)
+		elif opt in ('-p', '--pid-file'):
+			config['pidFile'] = str(value)
+		else:
+			assert False
+	
+	# Add in arguments
+	config['args'] = args
+
+	# Parse the configuration file
+	cFile = loadConfig(config['configFile'])
+	for k,v in cFile.iteritems():
+		config[k] = v
+
+	# Return configuration
+	return config
+
+
 def main(args):
-	# Read in the configuration file
-	config = loadConfig(CONFIG_FILE)
+	# Parse the command line and read in the configuration file
+	config = parseOptions(args)
 	
 	# Setup the logging
+	## Basic
 	logger = logging.getLogger(__name__)
 	logger.setLevel(logging.INFO)
-	
+	## Format
+	format = formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+	logger.setFormatter(format)
+	## Handler
 	handler = logging.handlers.SysLogHandler(address = '/dev/log')
 	logger.addHandler(handler)
+	
+	# PID file
+	if config['pidFile'] is not None:
+		fh = open(config['pidFile'], 'w')
+		fh.write("%i\n" % os.getpid())
+		fh.close()
+	logger.info('Starting wxPi.py with PID %i' % os.getpid())
 	
 	# Open the database and read in the most recent state.  If the database doesn't exist
 	# or the state is stale we need to poll the 
@@ -111,8 +176,7 @@ def main(args):
 	except RuntimeError, e:
 		db = None
 		tData, sensorData = time.time(), {}
-		
-		print "WARNING: %s" % str(e)
+		logger.error('
 		
 	clearToSend = True
 	if len(sensorData.keys()) == 0:
