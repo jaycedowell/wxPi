@@ -32,6 +32,7 @@ static void sighandler(int signum)
 
 static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	PyObject *output, *bits, *temp, *temp2, *temp2a, *temp2b, *temp3;
+	int i;
 	long inputPin, duration, verbose, tStart;
 	struct sigaction sigact;
 	char message[512];
@@ -96,6 +97,9 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 		usleep(1000);
 	}
 	
+	// Close out wiringPi
+	rc->disableReceive();
+		
 	// Return
 	output = Py_BuildValue("O", bits);
 	return output;
