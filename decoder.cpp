@@ -106,7 +106,7 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	}
 	
 	// Shutdown the receiver
-	rc->disableReceieve();
+	rc->disableReceive();
 	
 	// Return
 	output = Py_BuildValue("O", bits);

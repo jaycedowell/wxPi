@@ -18,9 +18,12 @@ import logging.handlers
 import threading
 
 from config import CONFIG_FILE, loadConfig
-from wxThreads import *
-from utils import initState, wuUploader
+from database import Archive
+from decoder import read433
+from parser import parsePacketStream
+from utils import computeDewPoint, computeSeaLevelPressure, wuUploader
 
+from sensors.bmpBackend import BMP085
 """
 This module is used to fork the current process into a daemon.
 Almost none of this is necessary (or advisable) if your daemon
@@ -216,9 +219,8 @@ def main(args):
 		## Read from the 433 MHz radio
 		for i in xrange(loopsForState):
 			config['red'].on()
-			tData = time.time() + int(round(config['duration']*0.75)/2.0
-			packets = read433(config['radioPin'], int(round(config['duration']*0.75)), 
-								verbose=config['verbose'])
+			tData = time.time() + int(round(config['duration']*0.75))/2.0
+			packets = read433(config['radioPin'], int(round(config['duration']*0.75)))
 			config['red'].off()
 		
 			## Process the received packets and update the internal state
@@ -237,7 +239,7 @@ def main(args):
 			
 				config['yellow'].on()
 				sensorData['pressure'] =  pressure
-				sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], sensorData['elevation'])
+				sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], config['elevation'])
 				if 'indoorHumidity' in sensorData.keys():
 					sensorData['indoorTemperature'] = ps.readTemperature()
 					sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
@@ -281,6 +283,7 @@ def main(args):
 		## Done
 		t1 = time.time()
 		tSleep = config['duration'] - (t1-t0)
+		tSleep = tSleep if tSleep > 0 else 0
 		
 		## Sleep
 		time.sleep(tSleep)
