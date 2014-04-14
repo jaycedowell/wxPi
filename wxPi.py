@@ -216,11 +216,13 @@ def main(args):
 		
 		## Check if there is anything to update
 		if tData != tLastUpdateA:
-			if uCount > 3:
+			if uCount > 10:
 				db.writeData(tData, sensorData)
 				tLastUpdateA = 1.0*tData
 				
 				logger.info('Saving current state to archive')
+			else:
+				logger.warning('Too few updates to save data to archive')
 				
 		## Turn off the yellow LED
 		config['yellow'].off()
@@ -233,26 +235,29 @@ def main(args):
 		
 		# Make sure that it is fresh so that we only send the latest and greatest
 		if tData != tLastUpdateU:
-			if time.time()-tData < config['duration']:
-				uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
-									tData, sensorData, archive=db, 
-									includeIndoor=config['includeIndoor'])
+			if uCount > 10:
+				if time.time()-tData < config['duration']:
+					uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
+										tData, sensorData, archive=db, 
+										includeIndoor=config['includeIndoor'])
 									
-				if uploadStatus:
-					tLastUpdateU = 1.0*tData
+					if uploadStatus:
+						tLastUpdateU = 1.0*tData
 					
-					logger.info('Posted data to WUnderground')
-					config['green'].blink()
-					time.sleep(3)
-					config['green'].blink()
+						logger.info('Posted data to WUnderground')
+						config['green'].blink()
+						time.sleep(3)
+						config['green'].blink()
+					else:
+						logger.error('Failed to post data to WUndergroun')
+						config['red'].blink()
+						time.sleep(3)
+						config['red'].blink()
+					
 				else:
-					logger.error('Failed to post data to WUndergroun')
-					config['red'].blink()
-					time.sleep(3)
-					config['red'].blink()
-					
+					logger.warning('Most recent archive entry is too old, skipping update')
 			else:
-				logger.warning('Most recent archive entry is too old, skipping update')
+				logger.warning('Too few updates to send data to WUnderground')
 				
 		## Done
 		t1 = time.time()
