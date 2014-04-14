@@ -23,7 +23,7 @@ from sensors.bmpBackend import BMP085
 
 
 __version__ = "0.1"
-__all__ = ["RadioMonitor", "BMP085Monitor", "Archiver", "Uploader", "__version__", "__all__"]
+__all__ = ["RadioMonitor", "BMP085Monitor", "__version__", "__all__"]
 
 
 # Setup the logger
@@ -173,17 +173,32 @@ class BMP085Monitor(ThreadBase):
 			tData, sensorData = self.state.get()
 			
 			## Read the sensor data
-			ps = BMP085(address=0x77, mode=3)
-			pressure = ps.readPressure() / 100.0 
-			temperature = ps.readTemperature()
+			try:
+				ps = BMP085(address=0x77, mode=3)
+				pressure = ps.readPressure() / 100.0 
+				temperature = ps.readTemperature()
 			
-			tData = time.time()
-			sensorData['pressure'] = pressure
-			sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], self.config['elevation'])
-			if 'indoorHumidity' in sensorData.keys():
-				sensorData['indoorTemperature'] = temperature
-				sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
-				
+				tData = time.time()
+				sensorData['pressure'] = pressure
+				sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], self.config['elevation'])
+				if 'indoorHumidity' in sensorData.keys():
+					sensorData['indoorTemperature'] = temperature
+					sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
+					
+			except Exception, e:
+				exc_type, exc_value, exc_traceback = sys.exc_info()
+				wxThreadsLogger.error("%s: run failed with: %s at line %i", 
+										type(self).__name__, str(e), traceback.tb_lineno(exc_traceback))
+									
+				## Grab the full traceback and save it to a string via StringIO
+				fileObject = StringIO.StringIO()
+				traceback.print_tb(exc_traceback, file=fileObject)
+				tbString = fileObject.getvalue()
+				fileObject.close()
+				## Print the traceback to the logger as a series of DEBUG messages
+				for line in tbString.split('\n'):
+						wxThreadsLogger.debug("%s", line)
+						
 			## Save the current state
 			self.state.set(tData, sensorData)
 			
@@ -197,107 +212,5 @@ class BMP085Monitor(ThreadBase):
 			t1 = time.time()
 			tSleep = self.config['duration'] - (t1-t0)
 			
-			## Sleep
-			time.sleep(tSleep)
-
-
-class Archiver(ThreadBase):
-	"""
-	Thread to write the current state to the archive at regular intervals.
-	"""
-	
-	def run(self):
-		"""
-		Archive the current data to the archive.
-		"""
-		
-		# State variable to keep up with what has and hasn't been sent
-		tLastUpdate = 0.0
-		
-		while self.alive.isSet():
-			## Begin the loop
-			t0 = time.time()
-			
-			## Get the lock on the current state
-			self.state.lock()
-			
-			## Turn on the yellow LED
-			self.config['yellow'].on()
-			
-			## Get the current state
-			tData, sensorData = self.state.get()
-			
-			## Check if there is anything to update
-			if tData != tLastUpdate:
-				if len(sensorData.keys()) > 0:
-					self.db.writeData(tData, sensorData)
-					tLastUpdate = 1.0*tData
-					
-					wxThreadsLogger.info('%s: Saving current state to archive', type(self).__name__)
-					
-			## Turn off the yellow LED
-			self.config['yellow'].off()
-			
-			## Release lock on the current state
-			self.state.unlock()
-			
-			## Done
-			t1 = time.time()
-			tSleep = self.config['duration'] - (t1-t0)
-			
-			## Sleep
-			time.sleep(tSleep)
-
-
-class Uploader(ThreadBase):
-	"""
-	Thread for sending periodic updates to the WUnderground PWS service.
-	"""
-	
-	def run(self):
-		"""
-		Post the latest weather data to WUnderground.
-		"""
-		
-		# State variable to keep up with what has and hasn't been sent
-		tLastUpdate = 0.0
-		
-		while self.alive.isSet():
-			## Begin the loop
-			t0 = time.time()
-			
-			## Get the latest batch of data
-			tData, sensorData = self.db.getData()
-		
-			# Make sure that it is fresh so that we only send the latest and greatest
-			if tData != tLastUpdate:
-				if time.time()-tData < 2*self.config['duration']:
-					uploadStatus = wuUploader(self.config['ID'], self.config['PASSWORD'], 
-										tData, sensorData, archive=self.db, 
-										includeIndoor=self.config['includeIndoor'])
-										
-					if uploadStatus:
-						tLastUpdate = 1.0*tData
-						
-						wxThreadsLogger.info('Posted data to WUnderground')
-						self.config['green'].blink()
-						time.sleep(3)
-						self.config['green'].blink()
-					else:
-						wxThreadsLogger.error('Failed to post data to WUndergroun')
-						self.config['red'].blink()
-						time.sleep(3)
-						self.config['red'].blink()
-						
-				else:
-					wxThreadsLogger.warning('Most recent archive entry is too old, skipping update')
-					
-			## Done
-			if not self.alive.isSet():
-				break
-				
-			t1 = time.time()
-			tSleep = self.config['duration'] - (t1-t0)
-				
 			## Sleep
 			time.sleep(tSleep)

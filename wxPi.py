@@ -175,8 +175,6 @@ def main(args):
 	# Setup the various threads
 	threads = []
 	threads.append( RadioMonitor(config, state, db) )
-	threads.append( Archiver(config, state, db) )
-	threads.append( Uploader(config, state, db) )
 	if config['enableBMP085']:
 		threads.append( BMP085Monitor(config, state, db) )
 		
@@ -200,7 +198,69 @@ def main(args):
 	signal.signal(signal.SIGPIPE, HandleSignalExit)
 	
 	# Enter the main loop
+	tLastUpdateA = 0.0
+	tLastUpdateU = 0.0
 	while True:
+		## Begin the loop
+		t0 = time.time()
+		
+		## Archive the current state
+		state.lock()
+		
+		## Turn on the yellow LED
+		config['yellow'].on()
+		
+		## Get the current state
+		tData, sensorData = state.get()
+		uCount = state.getUpdateCount()
+		
+		## Check if there is anything to update
+		if tData != tLastUpdateA:
+			if uCount > 3:
+				db.writeData(tData, sensorData)
+				tLastUpdateA = 1.0*tData
+				
+				logger.info('Saving current state to archive')
+				
+		## Turn off the yellow LED
+		config['yellow'].off()
+		
+		## Release lock on the current state
+		state.unlock()
+		
+		## Post the results to WUnderground
+		tData, sensorData = db.getData()
+		
+		# Make sure that it is fresh so that we only send the latest and greatest
+		if tData != tLastUpdateU:
+			if time.time()-tData < config['duration']:
+				uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
+									tData, sensorData, archive=db, 
+									includeIndoor=config['includeIndoor'])
+									
+				if uploadStatus:
+					tLastUpdateU = 1.0*tData
+					
+					logger.info('Posted data to WUnderground')
+					config['green'].blink()
+					time.sleep(3)
+					config['green'].blink()
+				else:
+					logger.error('Failed to post data to WUndergroun')
+					config['red'].blink()
+					time.sleep(3)
+					config['red'].blink()
+					
+			else:
+				logger.warning('Most recent archive entry is too old, skipping update')
+				
+		## Done
+		t1 = time.time()
+		tSleep = config['duration'] - (t1-t0)
+		
+		## Sleep
+		time.sleep(tSleep)
+		
 		## Check to see if any of the threads have stopped
 		stopped = False
 		for t in threads:
@@ -212,9 +272,6 @@ def main(args):
 		if stopped:
 			break
 			
-		## Sleep for a bit
-		time.sleep(1)
-		
 	#  Shutdown the remaining threads
 	for t in threads:
 		t.stop()

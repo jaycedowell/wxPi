@@ -48,7 +48,7 @@ class Archive(object):
 		Open the database.
 		"""
 		
-		self._dbConn = sqlite3.connect(self._dbName, check_same_thread=False)
+		self._dbConn = sqlite3.connect(self._dbName)
 		self._dbConn.row_factory = self.dict_factory
 		self._cursor = self._dbConn.cursor()
 		

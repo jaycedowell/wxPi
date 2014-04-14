@@ -37,6 +37,9 @@ class State(object):
 		# Lock to ensure that only one thread accesses/updates the state
 		self._lock = threading.Semaphore()
 		
+		# Update count
+		self.updates = 0
+		
 	def lock(self):
 		"""
 		Acquire the lock for the current state.
@@ -58,6 +61,7 @@ class State(object):
 		
 		self.tData = tData
 		self.sensorData = sensorData
+		self.updates += 1
 		
 	def get(self):
 		"""
@@ -65,6 +69,13 @@ class State(object):
 		"""
 		
 		return self.tData, self.sensorData
+		
+	def getUpdateCount(self):
+		"""
+		Return the number of times the state has been updated.
+		"""
+		
+		return self.updates
 
 
 def initState(config):
