@@ -146,6 +146,7 @@ def main(args):
 	
 	# Setup the logging
 	## Basic
+	print __name__
 	logger = logging.getLogger(__name__)
 	logger.setLevel(logging.DEBUG)
 	## Handler
@@ -163,14 +164,14 @@ def main(args):
 	logger.info('Starting wxPi.py')
 	
 	# Initialize the internal data state
-	db = initState(config)
+	db, state = initState(config)
 	
 	# Setup the various threads
 	threads = []
-	threads.append( RadioMonitor(config, db) )
-	#threads.append( BMP085Monitor(config, db) )
-	#threads.append( Archiver(config, db) )
-	#threads.append( Uploader(config, db) )
+	threads.append( RadioMonitor(config, state, db) )
+	#threads.append( BMP085Monitor(config, state, db) )
+	#threads.append( Archiver(config, state, db) )
+	#threads.append( Uploader(config, state, db) )
 	
 	# Start the threads
 	for t in threads:

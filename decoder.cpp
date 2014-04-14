@@ -44,7 +44,7 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	struct sigaction sigact;
 	char message[512];
 	
-	verbose = 1;
+	verbose = 0;
 	static char *kwlist[] = {"inputPin", "callback", NULL};
 	if( !PyArg_ParseTupleAndKeywords(args, kwds, "iO:set_callback", kwlist, &inputPin, &cbf) ) {
 		PyErr_Format(PyExc_RuntimeError, "Invalid parameters");
@@ -96,11 +96,12 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 			result = PyObject_CallObject(callbackFunc, arglist);
 			
 			//// Cleanup
-			PyGILState_Release(gstate);
-			Py_DECREF(result);
 			Py_DECREF(arglist);
-			//Py_DECREF(temp);
-			
+			if (result == NULL) {
+    				return NULL; /* Pass error back */
+			}
+			Py_DECREF(result);
+			PyGILState_Release(gstate);	
 			
 		}
 		

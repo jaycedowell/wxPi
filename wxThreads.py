@@ -17,18 +17,30 @@ __all__ = ["initState", "RadioMonitor", "BMP085Monitor", "Archiver", "Uploader",
 
 
 # The current weather data state and its lock
-tData = 0.0
-sensorData = {}
-stateLock = threading.Semaphore()
+class State(object):
+	def __init__(self):
+		self.tData = 0.0
+		self.sensorData = {}
+		self._lock = threading.Semaphore()
+		
+	def lock(self):
+		self._lock.acquire()
+		
+	def unlock(self):
+		self._lock.release()
+		
+	def set(self, tData, sensorData):
+		self.tData = tData
+		self.sensorData = sensorData
+		
+	def get(self):
+		return self.tData, self.sensorData
 
 
 def initState(config):
 	"""
 	Initialize the current state using values stored in the database.
 	"""
-	
-	# Acquire the lock on the current state
-	stateLock.acquire()
 	
 	# Get the latest from the database
 	try:
@@ -42,17 +54,19 @@ def initState(config):
 		tData, sensorData = time.time(), {}
 		logging.error(str(e))
 		
-	# Release the lock
-	stateLock.release()
+	# Create the state
+	state = State()
+	state.set(tData, sensorData)
 	
 	# Return the database instance
-	return db
+	return db, state
 
 
 class RadioMonitor(object):
-	def __init__(self, config, db):
+	def __init__(self, config, state, db):
 		# Basic configuration
 		self.config = config
+		self.state = state
 		self.db = db
 		
 		# Thread information
@@ -86,9 +100,13 @@ class RadioMonitor(object):
 		"""
 		Monitor the radio looking for data
 		"""
-		
-		print "There"
-		read433(self.config['radioPin'], self.callback)
+	
+		try:	
+			read433(self.config['radioPin'], self.callback)
+		except Exception, e:
+			logging.error(str(e))
+			
+		return True
 			
 	def callback(self, packets):
 		"""
@@ -99,33 +117,36 @@ class RadioMonitor(object):
 		logging.debug("Got packets: %s" % str(packets))
 		
 		## Acquire the lock on the current state
-		stateLock.acquire()
-
-		### Turn on the red LED
-		#self.config['red'].on()
+		self.state.lock()
+	
+		## Turn on the red LED
+                self.config['red'].on()
+			
+		## Get the current state
+		tData, sensorData = self.state.get()
 		
 		## Parse the available data
 		tData = time.time()
 		packets = [tuple(packets.split(None, 1)),]
-		sensorData = parsePacketStream(packets, elevation=self.config['elevation'], 
-										inputDataDict=sensorData, 
-										verbose=self.config['verbose'])
-										
-		### Turn on the red LED
-		#self.config['red'].off()
-	
-		print "Done"
+		sensorData = parsePacketStream(packets, elevation=self.config['elevation'], inputDataDict=sensorData, verbose=self.config['verbose'])
+		
+		## Save the current state
+		self.state.set(tData, sensorData)
+								
+		## Turn on the red LED
+		self.config['red'].off()
 			
 		## Release the lock
-		stateLock.release()
+		self.state.unlock()
 		
 		return True
 
 
 class BMP085Monitor(object):
-	def __init__(self, config, db):
+	def __init__(self, config, state, db):
 		# Basic configuration
 		self.config = config
+		self.state = state
 		self.db = db
 		
 		# Thread information
@@ -165,11 +186,14 @@ class BMP085Monitor(object):
 			t0 = time.time()
 			
 			## Get the lock on the current state
-			stateLock.acquire()
+			self.state.lock()
 			
 			## Turn on the red LED
 			self.config['red'].on()
 			
+			## Get the current state
+                	tData, sensorData = self.state.get()
+
 			## Read the sensor data
 			ps = BMP085(address=0x77, mode=3)
 			p = ps.readPressure() / 100.0 
@@ -182,11 +206,14 @@ class BMP085Monitor(object):
 				sensorData['indoorTemperature'] = t
 				sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
 				
+			## Save the current state
+                	self.state.set(tData, sensorData)
+
 			## Turn off the red LED
 			self.config['red'].off()
 			
 			## Release lock on the current state
-			stateLock.release()
+			self.state.release()
 			
 			## Done
 			t1 = time.time()
@@ -197,9 +224,10 @@ class BMP085Monitor(object):
 
 
 class Archiver(object):
-	def __init__(self, config, db):
+	def __init__(self, config, state, db):
 		# Basic configuration
 		self.config = config
+		self.state = state
 		self.db = db
 		
 		# Thread information
@@ -242,11 +270,14 @@ class Archiver(object):
 			t0 = time.time()
 			
 			## Get the lock on the current state
-			stateLock.acquire()
+			self.state.lock()
 			
 			## Turn on the yellow LED
 			self.config['yellow'].on()
-						
+			
+			## Get the current state
+                	tData, sensorData = self.state.get()
+			
 			## Check if there is anything to update
 			if tData != tLastUpdate:
 				if len(sensorData.keys()) > 0:
@@ -259,7 +290,7 @@ class Archiver(object):
 			self.config['yellow'].off()
 			
 			## Release lock on the current state
-			stateLock.release()
+			self.state.unlock()
 			
 			## Done
 			t1 = time.time()
@@ -270,9 +301,10 @@ class Archiver(object):
 
 
 class Uploader(object):
-	def __init__(self, config, db):
+	def __init__(self, config, state, db):
 		# Basic configuration
 		self.config = config
+		self.state = state
 		self.db = db
 		
 		# Thread information
