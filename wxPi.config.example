@@ -12,9 +12,6 @@ PASSWORD: Your_Password_Here
 # WUnderground PWS system?
 #includeIndoor: False
 
-# Verbose output of the packet decoding process
-#verbose: True
-
 # Station elevation in meters
 #elevation: 0
 

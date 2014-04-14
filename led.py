@@ -6,16 +6,21 @@ import time
 import threading
 
 __version__ = '0.3'
-__all__ = ['LED', '__version__', '__all__']
+__all__ = ['GPIOLED', '__version__', '__all__']
 
 
-
-class LED(object):
+class GPIOLED(object):
 	"""
 	Class for controlling an LED via GPIO.
 	"""
 	
 	def __init__(self, pin):
+		"""
+		Initialize the class with a GPIO pin number and make sure that the 
+		specified as been exported via /sys/class/gpio/export and that it 
+		is marked for output.
+		"""
+	
 		# GPIO pin
 		self.pin = int(pin)
 		
@@ -26,19 +31,22 @@ class LED(object):
 		
 		# Setup
 		if self.pin > 0:
-			pass			
-			## Export
-			#fh = open('/sys/class/gpio/export', 'w')
-			#fh.write(str(self.pin))
-			#fh.flush()
-			#fh.close()
-		
-			## Direction
-			#fh = open('/sys/class/gpio/gpio%i/direction' % self.pin, 'w')
-			#fh.write('out')
-			#fh.flush()
-			#fh.close()
-			
+			try:	
+				# Export
+				fh = open('/sys/class/gpio/export', 'w')
+				fh.write(str(self.pin))
+				fh.flush()
+				fh.close()
+				
+				# Direction
+				fh = open('/sys/class/gpio/gpio%i/direction' % self.pin, 'w')
+				fh.write('out')
+				fh.flush()
+				fh.close()
+				
+			except IOError:
+				pass
+				
 	def on(self):
 		"""
 		Turn the LED on.
@@ -48,13 +56,13 @@ class LED(object):
 			if self.thread is not None:
 				self._stop()
 				
-			#self.lock.acquire()
+			self.lock.acquire()
 			
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('1')
 			fh.close()
 			
-			#self.lock.release()
+			self.lock.release()
 		
 	def off(self):
 		"""
@@ -65,13 +73,13 @@ class LED(object):
 			if self.thread is not None:
 				self._stop()
 				
-			#self.lock.acquire()
+			self.lock.acquire()
 			
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('0')
 			fh.close()
 			
-			#self.lock.release()
+			self.lock.release()
 			
 	def blink(self, blinkPeriod=0.25):
 		"""

@@ -7,7 +7,7 @@ File for dealing with the configuration of wxPi.py.
 import os
 import re
 
-from led import LED
+from led import GPIOLED as LED
 
 __version__ = '0.2'
 __all__ = ['CONFIG_FILE', 'loadConfig', '__version__', '__all__']
@@ -31,8 +31,7 @@ def loadConfig(filename):
 	configRE = re.compile(r'\s*:\s*')
 
 	# Initial values
-	config = {'verbose': False,
-			  'radioPin': 18, 
+	config = {'radioPin': 18, 
 			  'duration': 60.0, 
 			  'includeIndoor': False, 
 			  'elevation': 0.0, 
@@ -59,6 +58,7 @@ def loadConfig(filename):
 			
 	except IOError:
 		pass
+		
 	finally:
 		fh.close()
 		
@@ -70,7 +70,7 @@ def loadConfig(filename):
 	for key in ('duration', 'elevation'):
 		config[key] = float(config[key])	
 	## Boolean type conversions
-	for key in ('verbose', 'includeIndoor', 'enableBMP085'):
+	for key in ('includeIndoor', 'enableBMP085'):
 		config[key] = bool(config[key])
 		
 	# Create instances for the LEDs

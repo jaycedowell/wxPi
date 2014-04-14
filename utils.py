@@ -7,15 +7,89 @@ Various utility functions needed by wxPi.py
 import math
 import time
 import urllib
+import logging
+import threading
 from datetime import datetime
 
-__version__ = "0.1"
-__all__ = ["length_m2ft", "length_ft2m", "length_mm2in", "length_in2mm", 
+from database import Archive
+
+__version__ = "0.2"
+__all__ = ["State", "initState", 
+		   "length_m2ft", "length_ft2m", "length_mm2in", "length_in2mm", 
 		   "speed_ms2mph", "speed_mph2ms", 
 		   "temp_C2F", "temp_F2C", 
 		   "pressure_mb2inHg", "pressure_inHg2mb", 
 		   "computeDewPoint", "computeWindchill", "computeSeaLevelPressure", 
 		   "generateWeatherReport", "wuUploader", "__version__", "__all__"]
+
+
+# Setup the logger
+utilsLogger = logging.getLogger('__main__')
+
+
+# The current weather data state and its lock
+class State(object):
+	def __init__(self):
+		# Current state
+		self.tData = 0.0
+		self.sensorData = {}
+		
+		# Lock to ensure that only one thread accesses/updates the state
+		self._lock = threading.Semaphore()
+		
+	def lock(self):
+		"""
+		Acquire the lock for the current state.
+		"""
+		
+		self._lock.acquire()
+		
+	def unlock(self):
+		"""
+		Release the lock from the current state.
+		"""
+		
+		self._lock.release()
+		
+	def set(self, tData, sensorData):
+		"""
+		Set the current state's update timestamp and data dictionary.
+		"""
+		
+		self.tData = tData
+		self.sensorData = sensorData
+		
+	def get(self):
+		"""
+		Get the current state's update timestamp and data dictionary.
+		"""
+		
+		return self.tData, self.sensorData
+
+
+def initState(config):
+	"""
+	Initialize the current state using values stored in the database.
+	"""
+	
+	# Get the latest from the database
+	try:
+		db = Archive()
+		tData, sensorData = db.getData()
+		if time.time() - tData > 2*config['duration']:
+			sensorData = {}
+			
+	except RuntimeError, e:
+		db = None
+		tData, sensorData = time.time(), {}
+		logging.error(str(e))
+		
+	# Create the state
+	state = State(config)
+	state.set(tData, sensorData)
+	
+	# Return the database instance
+	return db, state
 
 
 def length_m2ft(value):
@@ -261,7 +335,7 @@ def generateWeatherReport(output, includeIndoor=True):
 	return wxReport
 
 
-def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=False, verbose=False):
+def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=False):
 	"""
 	Upload a collection of data to the WUnderground PWD service.
 	"""
@@ -358,13 +432,12 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 		## Convert to a GET-safe string
 		pwsData = urllib.urlencode(pwsData)
 		url = "%s?%s" % (PWS_BASE_URL, pwsData)
-		if verbose:
-			print url
+		utilsLogger.debug('WUnderground upload URL: %s', url)
 			
 		## Send
 		uh = urllib.urlopen(url)
 		status = uh.read()
-		print "WUnderground PWS update status: %s" % status
+		utilsLogger.debug('WUnderground PWS update status: %s', status)
 		uh.close()
 		
 		## Evaluate

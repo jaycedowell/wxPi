@@ -4,11 +4,17 @@
 Function for parsing data packets from Oregon Scientific weather sensors
 """
 
+import threading
+
 from utils import computeDewPoint, computeWindchill, computeSeaLevelPressure
 
 __version__ = '0.2'
 __all__ = ['computeChecksum', 'parsePacketv21', 'parsePacketStream', 
            '__version__', '__all__']
+
+
+# Setup the logger
+parserLogger = logging.getLogger('__main__')
 
 
 def computeChecksum(bits):
@@ -165,7 +171,7 @@ def _parseTHGR968(data):
 	
 	return output
 	
-def parsePacketv21(packet, wxData=None, verbose=False):
+def parsePacketv21(packet, wxData=None):
 	"""
 	Given a sequence of bits try to find a valid Oregon Scientific v2.1 
 	packet.  This function returns a status code of whether or not the packet
@@ -209,25 +215,23 @@ def parsePacketv21(packet, wxData=None, verbose=False):
 	#	return False, 'Invalid', -1, {}
 		
 	# Report
-	if verbose:
-		print 'sync     ', packet[ 0: 1]
-		print 'sensor   ', packet[ 1: 5]
-		print 'channel  ', packet[ 5: 6]
-		print 'code     ', packet[ 6: 8]
-		print 'flags    ', packet[ 8: 9]
-		print 'data     ', packet[ 9:-4]
-		print 'checksum ', packet[-4:-2]
-		print 'postamble', packet[-2:]
-		print '---------'
+	parserLogger.debug("sync      %s", str(packet[ 0: 1]))
+	parserLogger.debug("sensor    %s", str(packet[ 1: 5]))
+	parserLogger.debug("channel   %s", str(packet[ 5: 6]))
+	parserLogger.debug("code      %s", str(packet[ 6: 8]))
+	parserLogger.debug("flags     %s", str(packet[ 8: 9]))
+	parserLogger.debug("data      %s", str(packet[ 9:-4]))
+	parserLogger.debug("checksum  %s", str(packet[-4:-2]))
+	parserLogger.debug("postamble %s", str(packet[-2:]))
+	parserLogger.debug("----------")
 		
 	# Compute the checksum and compare it to what is in the packet
 	ccs = computeChecksum(packet[1:-4])
 	ccs = "%02X" % ccs
-	if verbose:
-		print 'computed ', ccs[::-1]
-		print 'valid    ', ccs[::-1] == packet[-4:-2]
-		print '---------'
-		
+	parserLogger.debug("computed  %s", str(ccs[::-1]))
+	parserLogger.debug("valid     %s", str(ccs[::-1] == packet[-4:-2]))
+	parserLogger.debug("----------")
+	
 	if packet[-4:-2] != ccs[::-1]:
 		return False, 'Invalid', -1, {}
 		
@@ -248,14 +252,13 @@ def parsePacketv21(packet, wxData=None, verbose=False):
 		return False, 'Invalid', -1, {}
 		
 	# Report
-	if verbose:
-		print output
-		
+	parserLogger.debug("output    %s", str(output))
+	
 	# Return the packet validity, channel, and data dictionary
 	return True, nm, channel, output
 
 
-def parsePacketStream(packets, elevation=0.0, inputDataDict=None, verbose=False):
+def parsePacketStream(packets, elevation=0.0, inputDataDict=None):
 	"""
 	Given a sequence of two-element type,payload packets from read433, 
 	find all of the Oregon Scientific sensor values and return the data 
@@ -276,7 +279,7 @@ def parsePacketStream(packets, elevation=0.0, inputDataDict=None, verbose=False)
 	# Parse the packet payload and save the output
 	for pType,pPayload in packets:
 		if pType == 'OSV2':
-			valid, sensorName, channel, sensorData = parsePacketv21(pPayload, verbose=verbose)
+			valid, sensorName, channel, sensorData = parsePacketv21(pPayload)
 		else:
 			continue
 			
@@ -322,4 +325,4 @@ if __name__ == "__main__":
 	           ('OSV2', 'A1D3012200710618D2E0'), 
 	           ('OSV2', 'A3D000470712930730B3AE'), 
 	           ('OSV2', 'A5D600BB09220528CD83E6AF'),]
-	output = parsePacketStream(packets, verbose=True)
+	output = parsePacketStream(packets)

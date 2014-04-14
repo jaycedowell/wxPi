@@ -19,7 +19,7 @@ import threading
 
 from config import CONFIG_FILE, loadConfig
 from wxThreads import *
-from utils import wuUploader
+from utils import initState, wuUploader
 
 """
 This module is used to fork the current process into a daemon.
@@ -97,6 +97,7 @@ Options:
 -h, --help                  Display this help information
 -c, --config-file           Path to configuration file
 -p, --pid-file              File to write the current PID to
+-d, --debug                 Set the logging to 'debug' level
 """
 
 	if exitCode is not None:
@@ -109,9 +110,10 @@ def parseOptions(args):
 	config = {}
 	config['configFile'] = CONFIG_FILE
 	config['pidFile'] = None
+	config['debug'] = False
 
 	try:
-		opts, args = getopt.getopt(args, "hc:p:", ["help", "config-file=", "pid-file="])
+		opts, args = getopt.getopt(args, "hc:p:d", ["help", "config-file=", "pid-file=", "debug"])
 	except getopt.GetoptError, err:
 		# Print help information and exit:
 		print str(err) # will print something like "option -a not recognized"
@@ -125,6 +127,8 @@ def parseOptions(args):
 			config['configFile'] = str(value)
 		elif opt in ('-p', '--pid-file'):
 			config['pidFile'] = str(value)
+		elif opt in ('-d', '--debug'):
+			config['debug'] = True
 		else:
 			assert False
 	
@@ -146,11 +150,13 @@ def main(args):
 	
 	# Setup the logging
 	## Basic
-	print __name__
 	logger = logging.getLogger(__name__)
-	logger.setLevel(logging.DEBUG)
+	if config['debug']:
+		logger.setLevel(logging.DEBUG)
+	else:
+		logger.setLebel(logging.INFO)
 	## Handler
-	handler = logging.handlers.SysLogHandler(address = '/dev/log')
+	handler = logging.handlers.SysLogHandler(address='/dev/log')
 	logger.addHandler(handler)
 	## Format
 	format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -169,47 +175,56 @@ def main(args):
 	# Setup the various threads
 	threads = []
 	threads.append( RadioMonitor(config, state, db) )
-	#threads.append( BMP085Monitor(config, state, db) )
-	#threads.append( Archiver(config, state, db) )
-	#threads.append( Uploader(config, state, db) )
-	
+	threads.append( Archiver(config, state, db) )
+	threads.append( Uploader(config, state, db) )
+	if config['enableBMP085']:
+		threads.append( BMP085Monitor(config, state, db) )
+		
 	# Start the threads
 	for t in threads:
 		t.start()
 		time.sleep(1)
 		
 	# Setup handler for SIGTERM so that we aren't left in a funny state
-	def HandleSignalExit(signum, threads, logger=logger):
+	def HandleSignalExit(signum, threads=threads, logger=logger):
 		logger.info('Exiting on signal %i', signum)
 		
 		# Stop all threads
 		for t in threads:
 			t.stop()
 			
-	# Hook in the signal handler - SIGTERM
+	# Hook in the signal handler - SIGINT SIGTERM SIGQUIT SIGPIPE
+	signal.signal(signal.SIGINT,  HandleSignalExit)
 	signal.signal(signal.SIGTERM, HandleSignalExit)
+	signal.signal(signal.SIGQUIT, HandleSignalExit)
+	signal.signal(signal.SIGPIPE, HandleSignalExit)
 	
 	# Enter the main loop
 	while True:
+		## Check to see if any of the threads have stopped
 		stopped = False
 		for t in threads:
 			if not t.alive.isSet():
 				stopped = True
 				break
+				
+		## If so we are done
 		if stopped:
 			break
+			
+		## Sleep for a bit
 		time.sleep(1)
 		
-	# Exit
+	#  Shutdown the remaining threads
 	for t in threads:
 		t.stop()
 		
+	# Stop the logger
 	logger.info('Finished')	
 	logging.shutdown()
-	sys.exit(0)
 
 
 if __name__ == "__main__":
-	#daemonize('/dev/null','/tmp/wxPi.stdin','/tmp/wxPi.stderr')
+	daemonize('/dev/null', '/dev/null', '/tmp/wxPi.stderr')
 	main(sys.argv[1:])
 	
