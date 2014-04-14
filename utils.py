@@ -411,8 +411,10 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 			
 		### Get the rainfall from an hour ago and from local midnight
 		ts, entry = archive.getData(age=3630)
+		utilsLogger.debug('%i, %s', ts, str(entry))
 		rainHour = entry['rainfall']
 		ts, entry  = archive.getData(age=time.time()-tLocalMidnight+30)
+		utilsLogger.debug('%i, %s', ts, str(entry))
 		rainDay = entry['rainfall']
 		
 		### Calculate

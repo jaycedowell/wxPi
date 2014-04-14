@@ -259,13 +259,6 @@ def main(args):
 			else:
 				logger.warning('Too few updates to send data to WUnderground')
 				
-		## Done
-		t1 = time.time()
-		tSleep = config['duration'] - (t1-t0)
-		
-		## Sleep
-		time.sleep(tSleep)
-		
 		## Check to see if any of the threads have stopped
 		stopped = False
 		for t in threads:
@@ -277,6 +270,13 @@ def main(args):
 		if stopped:
 			break
 			
+		## Done
+		t1 = time.time()
+		tSleep = config['duration'] - (t1-t0)
+		
+		## Sleep
+		time.sleep(tSleep)
+		
 	#  Shutdown the remaining threads
 	for t in threads:
 		t.stop()
