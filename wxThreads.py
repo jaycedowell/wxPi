@@ -121,12 +121,12 @@ class RadioMonitor(ThreadBase):
 		## Log this packet in debugging mode
 		wxThreadsLogger.debug("%s: callback got data '%s'", type(self).__name__, packets)
 		
-		## Acquire the lock on the current state
-		self.state.lock()
-		
 		## Turn on the red LED
 		self.config['red'].on()
 			
+		## Acquire the lock on the current state
+		self.state.lock()
+		
 		## Get the current state
 		tData, sensorData = self.state.get()
 		
@@ -138,13 +138,13 @@ class RadioMonitor(ThreadBase):
 		
 		## Save the current state
 		self.state.set(tData, sensorData)
-								
+		
+		## Release the lock
+		self.state.unlock()
+							
 		## Turn on the red LED
 		self.config['red'].off()
 			
-		## Release the lock
-		self.state.unlock()
-		
 		return True
 
 
@@ -162,34 +162,41 @@ class BMP085Monitor(ThreadBase):
 		while self.alive.isSet():
 			## Begin the loop
 			t0 = time.time()
-			
-			## Get the lock on the current state
-			self.state.lock()
-			
+		
 			## Turn on the red LED
 			self.config['red'].on()
 			
-			## Get the current state
-			tData, sensorData = self.state.get()
-			
-			## Read the sensor data
 			try:
+				## Read the sensor data
 				ps = BMP085(address=0x77, mode=3)
 				pressure = ps.readPressure() / 100.0 
 				temperature = ps.readTemperature()
+				
+				## Get the lock on the current state
+				self.state.lock()
 			
+				## Get the current state
+				tData, sensorData = self.state.get()
+			
+				## Process the sensor data
 				tData = time.time()
 				sensorData['pressure'] = pressure
 				sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], self.config['elevation'])
 				if 'indoorHumidity' in sensorData.keys():
 					sensorData['indoorTemperature'] = temperature
 					sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
-					
+						
+				## Save the current state
+				self.state.set(tData, sensorData)
+			
+				## Release lock on the current state
+				self.state.unlock()
+				
 			except Exception, e:
 				exc_type, exc_value, exc_traceback = sys.exc_info()
 				wxThreadsLogger.error("%s: run failed with: %s at line %i", 
 										type(self).__name__, str(e), traceback.tb_lineno(exc_traceback))
-									
+										
 				## Grab the full traceback and save it to a string via StringIO
 				fileObject = StringIO.StringIO()
 				traceback.print_tb(exc_traceback, file=fileObject)
@@ -197,16 +204,10 @@ class BMP085Monitor(ThreadBase):
 				fileObject.close()
 				## Print the traceback to the logger as a series of DEBUG messages
 				for line in tbString.split('\n'):
-						wxThreadsLogger.debug("%s", line)
-						
-			## Save the current state
-			self.state.set(tData, sensorData)
-			
+					wxThreadsLogger.debug("%s", line)
+					
 			## Turn off the red LED
 			self.config['red'].off()
-			
-			## Release lock on the current state
-			self.state.unlock()
 			
 			## Done
 			t1 = time.time()

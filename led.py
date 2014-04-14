@@ -26,7 +26,6 @@ class GPIOLED(object):
 		
 		# Thread information for blinking
 		self.thread = None
-		self.lock = threading.Semaphore()
 		self.alive = threading.Event()
 		
 		# Setup
@@ -53,11 +52,6 @@ class GPIOLED(object):
 		"""
 		
 		if self.pin > 0:
-			if self.thread is not None:
-				self._stop()
-				
-			self.lock.acquire()
-			
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('1')
 			fh.close()
@@ -70,11 +64,6 @@ class GPIOLED(object):
 		"""
 	
 		if self.pin > 0:
-			if self.thread is not None:
-				self._stop()
-				
-			self.lock.acquire()
-			
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('0')
 			fh.close()
@@ -125,21 +114,15 @@ class GPIOLED(object):
 		
 		while self.alive.isSet():
 			# On
-			self.lock.acquire()
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('1')
 			fh.close()
-			self.lock.release()
-			
 			if self.alive.isSet():
 				time.sleep(self.period)
 				
 			# Off
-			self.lock.acquire()
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('0')
 			fh.close()
-			self.lock.release()
-			
 			if self.alive.isSet():
 				time.sleep(self.period)

@@ -5,7 +5,6 @@ Module for interfacing with the sqlite3 database.
 import os
 import time
 import sqlite3
-import threading
 
 __version__ = "0.1"
 __all__ = ["Archive", "__version__", "__all__"]
@@ -33,7 +32,6 @@ class Archive(object):
 		self._dbName = os.path.join(os.path.dirname(__file__), 'archive', 'wx-data.db')
 		if not os.path.exists(self._dbName):
 			raise RuntimeError("Archive database not found")
-		self._lock = threading.Semaphore()
 			
 		self.open()
 		
@@ -69,9 +67,6 @@ class Archive(object):
 		if self._dbConn is None:
 			self.open()
 			
-		# Acquire the database lock
-		self._lock.acquire()
-		
 		# Fetch the entries that match
 		if age <= 0:
 			self._cursor.execute('SELECT * FROM wx ORDER BY dateTime DESC')
@@ -101,9 +96,6 @@ class Archive(object):
 			output['altHumidity'].append( row['outHumidity%i' % i] if row['outHumidity%i' % i] != -99 else None )
 			output['altDewpoint'].append( row['outDewpoint%i' % i] if row['outDewpoint%i' % i] != -99 else None )
 			
-		# Release the database lock
-		self._lock.release()
-		
 		return timestamp, output
 
 	def writeData(self, timestamp, data):
@@ -113,9 +105,6 @@ class Archive(object):
 		if self._dbConn is None:
 			self.open()
 			
-		# Acquire the database lock
-		self._lock.acquire()
-		
 		# Build up the values to insert
 		cNames = ['dateTime', 'usUnits']
 		dValues = [int(timestamp), 0]
@@ -140,8 +129,5 @@ class Archive(object):
 		# Add the entry to the database
 		self._cursor.execute('INSERT INTO wx (%s) VALUES (%s)' % (','.join(cNames), ','.join([str(v) for v in dValues])))
 		self._dbConn.commit()
-		
-		# Release the database lock
-		self._lock.release()
 		
 		return True

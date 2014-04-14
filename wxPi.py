@@ -179,17 +179,17 @@ def main(args):
 		threads.append( BMP085Monitor(config, state, db) )
 		
 	# Start the threads
-	for t in threads:
-		t.start()
+	for thrd in threads:
+		thrd.start()
 		time.sleep(1)
 		
 	# Setup handler for SIGTERM so that we aren't left in a funny state
-	def HandleSignalExit(signum, threads=threads, logger=logger):
+	def HandleSignalExit(signum, backgroundThreads=threads, logger=logger):
 		logger.info('Exiting on signal %i', signum)
 		
 		# Stop all threads
-		for t in threads:
-			t.stop()
+		for thrd in backgroundThreads:
+			thrd.stop()
 			
 	# Hook in the signal handler - SIGINT SIGTERM SIGQUIT SIGPIPE
 	signal.signal(signal.SIGINT,  HandleSignalExit)
@@ -205,14 +205,13 @@ def main(args):
 		t0 = time.time()
 		
 		## Archive the current state
-		state.lock()
-		
-		## Turn on the yellow LED
 		config['yellow'].on()
 		
 		## Get the current state
+		state.lock()
 		tData, sensorData = state.get()
 		uCount = state.getUpdateCount()
+		state.unlock()
 		
 		## Check if there is anything to update
 		if tData != tLastUpdateA:
@@ -226,9 +225,6 @@ def main(args):
 				
 		## Turn off the yellow LED
 		config['yellow'].off()
-		
-		## Release lock on the current state
-		state.unlock()
 		
 		## Post the results to WUnderground
 		tData, sensorData = db.getData()
@@ -249,7 +245,7 @@ def main(args):
 						time.sleep(3)
 						config['green'].blink()
 					else:
-						logger.error('Failed to post data to WUndergroun')
+						logger.error('Failed to post data to WUnderground')
 						config['red'].blink()
 						time.sleep(3)
 						config['red'].blink()
@@ -261,8 +257,8 @@ def main(args):
 				
 		## Check to see if any of the threads have stopped
 		stopped = False
-		for t in threads:
-			if not t.alive.isSet():
+		for thrd in threads:
+			if not thrd.alive.isSet():
 				stopped = True
 				break
 				
@@ -278,8 +274,8 @@ def main(args):
 		time.sleep(tSleep)
 		
 	#  Shutdown the remaining threads
-	for t in threads:
-		t.stop()
+	for thrd in threads:
+		thrd.stop()
 		
 	# Stop the logger
 	logger.info('Finished')	
