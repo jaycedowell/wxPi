@@ -1,6 +1,7 @@
 #include "Python.h"
 #include <iostream>
 #include <stdlib.h>
+#include <time.h>
 #include <errno.h>
 #include <signal.h>
 #include "wiringPi.h"
@@ -12,6 +13,8 @@ using namespace std;
 
 
 static int do_exit = 0;
+static int initalized = 0;
+RCSwitch *rc;
 
 /*
   sighandler - Signal handler for the read433 function
@@ -24,48 +27,43 @@ static void sighandler(int signum)
 }
 
 
-/* 
-   callbackFunction - Function for getting data out of read433 and back into Python
-*/
-
-static PyObject *callbackFunc = NULL;
-
-
 /*
   read433 - Function for reading directly from an RTL-SDR and returning a list of
   Manchester decoded bits.
 */
 
 static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
-	PyObject *output, *cbf, *arglist, *result;
-	PyGILState_STATE gstate;
-	long inputPin;
+	PyObject *output, *bits, *temp, *temp2, *temp2a, *temp2b, *temp3;
+	long inputPin, duration, verbose, tStart;
 	struct sigaction sigact;
 	char message[512];
 	
-	static char *kwlist[] = {"inputPin", "callback", NULL};
-	if( !PyArg_ParseTupleAndKeywords(args, kwds, "iO:set_callback", kwlist, &inputPin, &cbf) ) {
+	verbose = 0;
+	static char *kwlist[] = {"inputPin", "duration", NULL};
+	if( !PyArg_ParseTupleAndKeywords(args, kwds, "ii", kwlist, &inputPin, &duration) ) {
 		PyErr_Format(PyExc_RuntimeError, "Invalid parameters");
 		return NULL;
 	}
 	
 	// Validate the input
-	if (!PyCallable_Check(cbf)) {
-		PyErr_SetString(PyExc_TypeError, "callback parameter must be callable");
-        return NULL;
-    }
-    
-    // Setup the callback
-    Py_XINCREF(cbf);         	/* Add a reference to new callback */
-    Py_XDECREF(callbackFunc);  /* Dispose of previous callback */
-    callbackFunc = cbf;       	/* Remember new callback */
-	
-	// Setup the 433 MHz receiver
-	if(wiringPiSetupSys() == -1) {
-		PyErr_Format(PyExc_RuntimeError, "Cannot initialize the wiringPi library");
+	if( duration <= 0 ) {
+		PyErr_Format(PyExc_ValueError, "Duration value must be greater than zero");
 		return NULL;
-   	}
-   	RCSwitch *rc = new RCSwitch(inputPin,-1);
+	}
+	
+	// Setup the 433 MHz receiver if needed
+	if( !initalized ) {
+		if(wiringPiSetupSys() == -1) {
+			PyErr_Format(PyExc_RuntimeError, "Cannot initialize the wiringPi library");
+		   return NULL;
+		}
+		
+		if( initalized != inputPin ) {
+			rc = new RCSwitch(inputPin,-1);
+		}
+		
+		initalized = (int) inputPin;
+	}
    	
    	// Setup the signal handler	so that we can exit the callback function
 	sigact.sa_handler = sighandler;
@@ -75,39 +73,43 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	sigaction(SIGTERM, &sigact, NULL);
 	sigaction(SIGQUIT, &sigact, NULL);
 	sigaction(SIGPIPE, &sigact, NULL);
+   	
+	// Setup the output list
+	bits = PyList_New(0);
 	
 	// Go
-	while ( !do_exit ) {
+	tStart = (long) time(NULL);
+	while ((long) time(NULL) - tStart < duration && !do_exit) {
 		//// Check for a message
 		if ( rc->OokAvailable() ) {
 			rc->getOokCode(message);
 			
-			//// Preserve the state
-			gstate = PyGILState_Ensure();
-			
-			//// Send to the callback
-			arglist = Py_BuildValue("(s)", message);
-			result = PyObject_CallObject(callbackFunc, arglist);
-			Py_DECREF(arglist);
-			if (result == NULL) {
-    				return NULL; /* Pass error back */
+			if( verbose ) {
+				cout << message << "\n" << flush;
 			}
-			Py_DECREF(result);
 			
-			//// Resume the state
-			PyGILState_Release(gstate);		
+			temp = PyString_FromString(message);
+			temp2 = PyObject_CallMethod(temp, "split", "(si)", " ", 1);
+			
+			temp2a = PyList_GetItem(temp2, (Py_ssize_t) 0);
+			temp2b = PyList_GetItem(temp2, (Py_ssize_t) 1);
+			temp3 = PyTuple_Pack((Py_ssize_t) 2, temp2a, temp2b);
+			PyList_Append(bits, temp3);
+			
+			Py_DECREF(temp);
+			Py_DECREF(temp2);
+			Py_DECREF(temp3);
 		}
 		
 		//// Wait a bit (~1 ms)
 		usleep(1000);
 	}
 	
-	// Close out wiringPi
-	rc->disableReceive();
-		
+	// Shutdown the receiver
+	rc->disableReceieve();
+	
 	// Return
-	output = Py_True;
-	Py_INCREF(output);
+	output = Py_BuildValue("O", bits);
 	return output;
 }
 
@@ -118,10 +120,11 @@ suitable for identifying Oregon Scientific v2.1 and v3.0 sensor data.\n\
 \n\
 Inputs:\n\
   * inputPin - GPIO pin on the Raspberry Pi to use\n\
-  * callback - callback function for parsing the packets\n\
+  * duration - integer number of seconds to capture data for\n\
 \n\
 Outputs:\n\
- * True upon completion\n\
+ * packets - a list of two-element tuples containing the protocol and\n\
+             the packat data-header as a hex string\n\
 \n\
 Based on:\n\
  * http://www.osengr.org/WxShield/Downloads/OregonScientific-RF-Protocols-II.pdf\n\

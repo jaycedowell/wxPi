@@ -169,102 +169,114 @@ def main(args):
 		fh.close()
 	logger.info('Starting wxPi.py')
 	
-	# Initialize the internal data state
-	db, state = initState(config)
+	# Setup a flag that we can toggle if we receive a signal
+	alive = threading.Event()
+	alive.set()
 	
-	# Setup the various threads
-	threads = []
-	threads.append( RadioMonitor(config, state, db) )
-	if config['enableBMP085']:
-		threads.append( BMP085Monitor(config, state, db) )
-		
-	# Start the threads
-	for thrd in threads:
-		thrd.start()
-		time.sleep(1)
-		
 	# Setup handler for SIGTERM so that we aren't left in a funny state
-	def HandleSignalExit(signum, backgroundThreads=threads, logger=logger):
+	def HandleSignalExit(signum, loopflag=alive, logger=logger):
 		logger.info('Exiting on signal %i', signum)
 		
-		# Stop all threads
-		for thrd in backgroundThreads:
-			thrd.stop()
-			
+		# Stop the loop
+		loopflag.clear()
+		
 	# Hook in the signal handler - SIGINT SIGTERM SIGQUIT SIGPIPE
 	signal.signal(signal.SIGINT,  HandleSignalExit)
 	signal.signal(signal.SIGTERM, HandleSignalExit)
 	signal.signal(signal.SIGQUIT, HandleSignalExit)
 	signal.signal(signal.SIGPIPE, HandleSignalExit)
 	
+	# Get the latest from the database
+	try:
+		db = Archive()
+		tData, sensorData = db.getData()
+		if time.time() - tData > 2*config['duration']:
+			sensorData = {}
+			
+	except RuntimeError, e:
+		db = None
+		tData, sensorData = time.time(), {}
+		logging.error(str(e))
+		
+	# Make sure the database has provided something useful.  If not, we need to
+	# run several iterations to build up the current picture of what is going on.
+	if len(sensorData.keys()) == 0:
+		buildState = True
+		loopsForState = 3
+	else:
+		buildState = False
+		loopsForState = 1
+		
 	# Enter the main loop
-	tLastUpdateA = 0.0
-	tLastUpdateU = 0.0
-	while True:
+	tLastUpdate = 0.0
+	while alive.isSet():
 		## Begin the loop
 		t0 = time.time()
 		
-		## Archive the current state
+		## Read from the 433 MHz radio
+		for i in xrange(loopsForState):
+			config['red'].on()
+			tData = time.time() + int(round(config['duration']*0.75)/2.0
+			packets = read433(config['radioPin'], int(round(config['duration']*0.75)), 
+								verbose=config['verbose'])
+			config['red'].off()
+		
+			## Process the received packets and update the internal state
+			config['yellow'].on()
+			sensorData = parsePacketStream(packets, elevation=config['elevation'], 
+											inputDataDict=sensorData)
+			config['yellow'].off()
+		
+			# Poll the BMP085/180 - if needed
+			if config['enableBMP085']:
+				config['red'].on()
+				ps = BMP085(address=0x77, mode=3)
+				pressure = ps.readPressure() / 100.0
+				temperature = ps.readTemperature()
+				config['red'].off()
+			
+				config['yellow'].on()
+				sensorData['pressure'] =  pressure
+				sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], sensorData['elevation'])
+				if 'indoorHumidity' in sensorData.keys():
+					sensorData['indoorTemperature'] = ps.readTemperature()
+					sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
+				config['yellow'].off()
+				
+		## Have we built up the state?
+		if buildState:
+			loopsForState = 1
+			
+		## Check if there is anything to update in the archive
 		config['yellow'].on()
-		
-		## Get the current state
-		state.lock()
-		tData, sensorData = state.get()
-		uCount = state.getUpdateCount()
-		state.unlock()
-		
-		## Check if there is anything to update
-		if tData != tLastUpdateA:
-			if uCount > 10:
-				db.writeData(tData, sensorData)
-				tLastUpdateA = 1.0*tData
-				
-				logger.info('Saving current state to archive')
-			else:
-				logger.warning('Too few updates to save data to archive')
-				
-		## Turn off the yellow LED
+		if tData != tLastUpdate:
+			db.writeData(tData, sensorData)
+			logger.info('Saving current state to archive')
+		else:
+			logger.warning('Data timestamp has not changed since last poll, archiving skipped')
 		config['yellow'].off()
 		
 		## Post the results to WUnderground
-		tData, sensorData = db.getData()
-		
-		# Make sure that it is fresh so that we only send the latest and greatest
-		if tData != tLastUpdateU:
-			if uCount > 10:
-				if time.time()-tData < config['duration']:
-					uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
+		if tData != tLastUpdate:
+			uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
 										tData, sensorData, archive=db, 
 										includeIndoor=config['includeIndoor'])
-									
-					if uploadStatus:
-						tLastUpdateU = 1.0*tData
-					
-						logger.info('Posted data to WUnderground')
-						config['green'].blink()
-						time.sleep(3)
-						config['green'].blink()
-					else:
-						logger.error('Failed to post data to WUnderground')
-						config['red'].blink()
-						time.sleep(3)
-						config['red'].blink()
-					
-				else:
-					logger.warning('Most recent archive entry is too old, skipping update')
+										
+			if uploadStatus:
+				tLastUpdate = 1.0*tData
+				
+				logger.info('Posted data to WUnderground')
+				config['green'].blink()
+				time.sleep(3)
+				config['green'].blink()
 			else:
-				logger.warning('Too few updates to send data to WUnderground')
+				logger.error('Failed to post data to WUnderground')
+				config['red'].blink()
+				time.sleep(3)
+				config['red'].blink()
 				
-		## Check to see if any of the threads have stopped
-		stopped = False
-		for thrd in threads:
-			if not thrd.alive.isSet():
-				stopped = True
-				break
-				
-		## If so we are done
-		if stopped:
-			break
+		else:
+			logger.warning('Data timestamp has not changed since last poll, archiving skipped')
 			
 		## Done
 		t1 = time.time()
@@ -272,10 +284,6 @@ def main(args):
 		
 		## Sleep
 		time.sleep(tSleep)
-		
-	#  Shutdown the remaining threads
-	for thrd in threads:
-		thrd.stop()
 		
 	# Stop the logger
 	logger.info('Finished')	
