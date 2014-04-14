@@ -56,8 +56,6 @@ class GPIOLED(object):
 			fh.write('1')
 			fh.close()
 			
-			self.lock.release()
-		
 	def off(self):
 		"""
 		Turn the LED off.
@@ -67,8 +65,6 @@ class GPIOLED(object):
 			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
 			fh.write('0')
 			fh.close()
-			
-			self.lock.release()
 			
 	def blink(self, blinkPeriod=0.25):
 		"""
