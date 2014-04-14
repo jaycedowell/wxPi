@@ -154,12 +154,12 @@ def main(args):
 	if config['debug']:
 		logger.setLevel(logging.DEBUG)
 	else:
-		logger.setLebel(logging.INFO)
+		logger.setLevel(logging.INFO)
 	## Handler
 	handler = logging.handlers.SysLogHandler(address='/dev/log')
 	logger.addHandler(handler)
 	## Format
-	format = formatter = logging.Formatter('%(filename)s[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+	format = formatter = logging.Formatter(os.path.basename(__file__)+'[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 	handler.setFormatter(format)
 	
 	# PID file

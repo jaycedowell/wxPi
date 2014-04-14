@@ -85,7 +85,7 @@ def initState(config):
 		logging.error(str(e))
 		
 	# Create the state
-	state = State(config)
+	state = State()
 	state.set(tData, sensorData)
 	
 	# Return the database instance

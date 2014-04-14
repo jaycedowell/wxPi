@@ -19,7 +19,6 @@ from decoder import read433
 from parser import parsePacketStream
 from utils import computeDewPoint, computeSeaLevelPressure, generateWeatherReport, wuUploader
 
-from led import LED
 from sensors.bmpBackend import BMP085
 
 
@@ -192,7 +191,7 @@ class BMP085Monitor(ThreadBase):
 			self.config['red'].off()
 			
 			## Release lock on the current state
-			self.state.release()
+			self.state.unlock()
 			
 			## Done
 			t1 = time.time()
@@ -231,7 +230,7 @@ class Archiver(ThreadBase):
 			## Check if there is anything to update
 			if tData != tLastUpdate:
 				if len(sensorData.keys()) > 0:
-					db.writeData(tData, sensorData)
+					self.db.writeData(tData, sensorData)
 					tLastUpdate = 1.0*tData
 					
 					wxThreadsLogger.info('%s: Saving current state to archive', type(self).__name__)
@@ -264,6 +263,9 @@ class Uploader(ThreadBase):
 		tLastUpdate = 0.0
 		
 		while self.alive.isSet():
+			## Begin the loop
+			t0 = time.time()
+			
 			## Get the latest batch of data
 			tData, sensorData = self.db.getData()
 		

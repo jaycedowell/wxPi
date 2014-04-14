@@ -4,6 +4,7 @@
 Function for parsing data packets from Oregon Scientific weather sensors
 """
 
+import logging
 import threading
 
 from utils import computeDewPoint, computeWindchill, computeSeaLevelPressure
