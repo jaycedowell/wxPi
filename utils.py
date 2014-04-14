@@ -411,25 +411,24 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 			
 		### Get the rainfall from an hour ago and from local midnight
 		ts, entry = archive.getData(age=3630)
-		utilsLogger.debug('%i, %s', ts, str(entry))
 		rainHour = entry['rainfall']
 		ts, entry  = archive.getData(age=time.time()-tLocalMidnight+30)
-		utilsLogger.debug('%i, %s', ts, str(entry))
 		rainDay = entry['rainfall']
 		
 		### Calculate
-		try:
-			rainHour = sensorData['rainfall'] - rainHour
-			if rainHour < 0:
-				rainHour = 0.0
-			rainDay = sensorData['rainfall'] - rainDay
-			if rainDay < 0:
-				rainDay = 0.0
-			pwsData['rainin'] = length_mm2in( rainHour )
-			pwsData['dailyrainin'] = length_mm2in( rainDay )
-		except KeyError:
-			pass
-			
+		if rainHour >= 0 and rainDay >= 0:
+			try:
+				rainHour = sensorData['rainfall'] - rainHour
+				if rainHour < 0:
+					rainHour = 0.0
+				rainDay = sensorData['rainfall'] - rainDay
+				if rainDay < 0:
+					rainDay = 0.0
+				pwsData['rainin'] = length_mm2in( rainHour )
+				pwsData['dailyrainin'] = length_mm2in( rainDay )
+			except KeyError:
+				pass
+				
 	## Add in the indoor values if requested
 	if includeIndoor:
 		try:
@@ -445,7 +444,7 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 		## Convert to a GET-safe string
 		pwsData = urllib.urlencode(pwsData)
 		url = "%s?%s" % (PWS_BASE_URL, pwsData)
-		utilsLogger.debug('WUnderground upload URL: %s', url)
+		utilsLogger.info('WUnderground upload URL: %s', url)
 			
 		## Send
 		uh = urllib.urlopen(url)
