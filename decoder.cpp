@@ -2,8 +2,6 @@
 #include <iostream>
 #include <stdlib.h>
 #include <time.h>
-#include <errno.h>
-#include <signal.h>
 #include "wiringPi.h"
 
 #include "RCSwitch.h"
@@ -15,16 +13,6 @@ using namespace std;
 static int do_exit = 0;
 static int initalized = 0;
 RCSwitch *rc;
-
-/*
-  sighandler - Signal handler for the read433 function
-*/
-
-static void sighandler(int signum)
-{
-	fprintf(stderr, "Signal caught, exiting!\n");
-	do_exit = 1;
-}
 
 
 /*
@@ -64,15 +52,6 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 		
 		initalized = (int) inputPin;
 	}
-   	
-   	// Setup the signal handler	so that we can exit the callback function
-	sigact.sa_handler = sighandler;
-	sigemptyset(&sigact.sa_mask);
-	sigact.sa_flags = 0;
-	sigaction(SIGINT, &sigact, NULL);
-	sigaction(SIGTERM, &sigact, NULL);
-	sigaction(SIGQUIT, &sigact, NULL);
-	sigaction(SIGPIPE, &sigact, NULL);
    	
 	// Setup the output list
 	bits = PyList_New(0);

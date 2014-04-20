@@ -180,8 +180,12 @@ def main(args):
 	def HandleSignalExit(signum, loopflag=alive, logger=logger):
 		logger.info('Exiting on signal %i', signum)
 		
+		# Stop the logger
+        	logger.info('Finished')
+        	logging.shutdown()
+		
 		# Stop the loop
-		loopflag.clear()
+		sys.exit(0)
 		
 	# Hook in the signal handler - SIGINT SIGTERM SIGQUIT SIGPIPE
 	signal.signal(signal.SIGINT,  HandleSignalExit)
@@ -219,8 +223,8 @@ def main(args):
 		## Read from the 433 MHz radio
 		for i in xrange(loopsForState):
 			config['red'].on()
-			tData = time.time() + int(round(config['duration']*0.75))/2.0
-			packets = read433(config['radioPin'], int(round(config['duration']*0.75)))
+			tData = time.time() + int(round(config['duration']-5))/2.0
+			packets = read433(config['radioPin'], int(round(config['duration']-5)))
 			config['red'].off()
 		
 			## Process the received packets and update the internal state
