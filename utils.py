@@ -289,9 +289,9 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 	
 	## Add in the outdoor temperature/humidity values
 	try:
-		pwsData['tempf'] = temp_C2F( sensorData['temperature'] )
+		pwsData['tempf'] = round(temp_C2F( sensorData['temperature'] ), 1)
 		pwsData['humidity'] = sensorData['humidity']
-		pwsData['dewptf'] = temp_C2F( sensorData['dewpoint'] )
+		pwsData['dewptf'] = round(temp_C2F( sensorData['dewpoint'] ), 1)
 	except KeyError:
 		pass
 	j = 2
@@ -300,18 +300,19 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 			t = sensorData['altTemperature'][i]
 			if t is None:
 				continue
-			pwsData['temp%if' % j] = temp_C2F( t )
+			pwsData['temp%if' % j] = round(temp_C2F( t ), 1)
 		except KeyError:
 			pass
 			
 	## Add in the barometric pressure
-	pwsData['baromin'] = pressure_mb2inHg( sensorData['pressure'] )
+	pwsData['baromin'] = round(pressure_mb2inHg( sensorData['pressure'] ), 2)
 	
 	## Add in the wind values
 	try:
-		pwsData['windspeedmph'] = speed_ms2mph( sensorData['average'] )
-		pwsData['windgustmph'] = speed_ms2mph( sensorData['gust'] )
+		pwsData['windspeedmph'] = round(speed_ms2mph( sensorData['average'] ), 1)
+		pwsData['windgustmph'] = round(speed_ms2mph( sensorData['gust'] ), 1)
 		pwsData['winddir'] = sensorData['direction']
+		pwsData['windgustdir'] = sensorData['gustDirection']
 	except KeyError:
 		pass
 		
@@ -346,15 +347,15 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 				rainDay = sensorData['rainfall'] - rainDay
 				if rainDay < 0:
 					rainDay = 0.0
-				pwsData['rainin'] = length_mm2in( rainHour )
-				pwsData['dailyrainin'] = length_mm2in( rainDay )
+				pwsData['rainin'] = round(length_mm2in( rainHour ), 2)
+				pwsData['dailyrainin'] = round(length_mm2in( rainDay ), 2)
 			except KeyError:
 				pass
 				
 	## Add in the indoor values if requested
 	if includeIndoor:
 		try:
-			pwsData['indoortempf'] =  temp_C2F( sensorData['indoorTemperature'] )
+			pwsData['indoortempf'] =  round(temp_C2F( sensorData['indoorTemperature'] ), 1)
 			pwsData['indoorhumidity'] = sensorData['indoorHumidity']
 		except KeyError:
 			pass

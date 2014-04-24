@@ -278,6 +278,8 @@ def parsePacketStream(packets, elevation=0.0, inputDataDict=None):
 			output[key] = value
 
 	# Parse the packet payload and save the output
+	gspd = []
+	gdir = []
 	for pType,pPayload in packets:
 		if pType == 'OSV2':
 			valid, sensorName, channel, sensorData = parsePacketv21(pPayload)
@@ -286,6 +288,10 @@ def parsePacketStream(packets, elevation=0.0, inputDataDict=None):
 			
 		## Data reorganization and computed quantities
 		if valid:
+			### Gust tracker
+			if sensorName == 'WGR968':
+				gspd.append( sensorData['gust'] )
+				gdir.append( sensorData['direction'] )
 			### Dew point - indoor and output
 			if sensorName in ('BHTR968', 'THGR268', 'THGR968'):
 				sensorData['dewpoint'] = computeDewPoint(sensorData['temperature'], sensorData['humidity'])
@@ -313,6 +319,12 @@ def parsePacketStream(packets, elevation=0.0, inputDataDict=None):
 					output[key] = sensorData[key]
 					
 	# Compute combined quantities
+	## Maximum gust observed
+	if len(gspd) > 0:
+		best = gspd.index( max(gspd) )
+		output['gust'] = gspd[best]
+		output['gustDirection'] = gdir[best]
+	## Windchill
 	if 'temperature' in output.keys() and 'average' in output.keys():
 		output['windchill'] = computeWindchill(output['temperature'], output['average'])
 
