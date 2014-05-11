@@ -370,11 +370,19 @@ def wuUploader(id, password, tData, sensorData, archive=None, includeIndoor=Fals
 		utilsLogger.info('WUnderground upload URL: %s', url)
 			
 		## Send
-		uh = urllib.urlopen(url)
-		status = uh.read()
-		utilsLogger.debug('WUnderground PWS update status: %s', status)
-		uh.close()
-		
+		try:
+			uh = urllib.urlopen(url)
+			status = uh.read()
+			utilsLogger.debug('WUnderground PWS update status: %s', status)
+		except Exception, e:
+			utilsLogger.warning('WUnderground PWS update failed: %s', str(e))
+			status = 'failed'
+			
+		try:
+			uh.close()
+		except:
+			pass
+			
 		## Evaluate
 		if status.find('success') != -1:
 			status = True
