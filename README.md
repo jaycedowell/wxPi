@@ -17,10 +17,12 @@ Usage
   1) Wire up the radio, LEDs, and pressure sensor
   
   2) Build the decoder.so extension via 'make'
+
+  3) Create the initial database in the 'archive' directory using the 'initDB.sh' script
+    
+  4) Update the configuration file 'wxPi.config'
   
-  3) Update the configuration file 'wxPi.config'
-  
-  4) Run the script via ./wxPi.py
+  5) Run the script via ./wxPi.py
 
 Supported Sensors
 -----------------
