@@ -169,8 +169,11 @@ class Archive(object):
 			
 		# Fetch the output
 		output = self._backend.getResponse(rid)
-		row = output[0]
-
+		try:
+			row = output[0]
+		except IndexError:
+			return 0, {}
+			
 		# Check for an empty database
 		if row is None:
 			return 0, {}
@@ -204,8 +207,11 @@ class Archive(object):
 			
 		# Fetch the output
 		output = self._backend.getResponse(rid)
-		row = output[0]
-		
+		try:
+			row = output[0]
+		except IndexError:
+			return 0, {}
+			
 		# Check for an empty database
 		if row is None:
 			return 0, {}
