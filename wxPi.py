@@ -12,18 +12,36 @@ import os
 import sys
 import time
 import getopt
-import signal
+import calendar
+from datetime import datetime
+
+import jinja2
+import cherrypy
+from cherrypy.process.plugins import Daemonizer
+
 import logging
-import logging.handlers
-import threading
+try:
+	from logging.handlers import WatchedFileHandler
+except ImportError:
+	from logging import FileHandler as WatchedFileHandler
 
-from config import CONFIG_FILE, loadConfig
+from config import *
 from database import Archive
-from decoder import read433
-from parser import parsePacketStream
-from utils import computeDewPoint, computeSeaLevelPressure, wuUploader
+from polling import PollingProcessor
+from utils import temp_C2F, pressure_mb2inHg, speed_ms2mph, length_mm2in
 
-from sensors.bmpBackend import BMP085
+# Path configuration
+_BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+CSS_PATH = os.path.join(_BASE_PATH, 'css')
+JS_PATH = os.path.join(_BASE_PATH, 'js')
+TEMPLATE_PATH = os.path.join(_BASE_PATH, 'templates')
+
+
+# Jinja configuration
+jinjaEnv = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATE_PATH), 
+							  extensions=['jinja2.ext.loopcontrols',])
+
+
 """
 This module is used to fork the current process into a daemon.
 Almost none of this is necessary (or advisable) if your daemon
@@ -101,6 +119,7 @@ Options:
 -c, --config-file           Path to configuration file
 -p, --pid-file              File to write the current PID to
 -d, --debug                 Set the logging to 'debug' level
+-l, --logfile               Set the logfile (default = /var/log/wxpi
 """
 
 	if exitCode is not None:
@@ -114,9 +133,10 @@ def parseOptions(args):
 	config['configFile'] = CONFIG_FILE
 	config['pidFile'] = None
 	config['debug'] = False
+	config['logfile'] = '/var/log/wxpi'
 
 	try:
-		opts, args = getopt.getopt(args, "hc:p:d", ["help", "config-file=", "pid-file=", "debug"])
+		opts, args = getopt.getopt(args, "hc:p:dl:", ["help", "config-file=", "pid-file=", "debug", "logfile="])
 	except getopt.GetoptError, err:
 		# Print help information and exit:
 		print str(err) # will print something like "option -a not recognized"
@@ -132,79 +152,178 @@ def parseOptions(args):
 			config['pidFile'] = str(value)
 		elif opt in ('-d', '--debug'):
 			config['debug'] = True
+		elif opt in ('-l', '--logfile'):
+			config['logfile'] = value
 		else:
 			assert False
 	
 	# Add in arguments
 	config['args'] = args
-
-	# Parse the configuration file
-	cFile = loadConfig(config['configFile'])
-	for k,v in cFile.iteritems():
-		config[k] = v
-
+	
 	# Return configuration
 	return config
 
 
+# AJAX interface
+class AJAX(object):
+	def __init__(self, config, db, leds):
+		self.config = config
+		self.db = db
+		self.leds = leds
+		
+	def serialize(self, dt):
+		if isinstance(dt, datetime):
+			if dt.utcoffset() is not None:
+				dt = dt - dt.utcoffset()
+		millis = int(calendar.timegm(dt.timetuple()) * 1000 + dt.microsecond / 1000)
+		return millis
+    	
+	@cherrypy.expose
+	@cherrypy.tools.json_out()
+	def summary(self):
+		## Query
+		ts, output = self.db.getData()
+		
+		### Ouch... there has to be a better way to do this
+		tUTCMidnight = (int(time.time()) / 86400) * 86400
+		localOffset = int(round(float(datetime.utcnow().strftime("%s.%f")) - time.time(), 1))
+		tLocalMidnight = tUTCMidnight + localOffset
+		if tLocalMidnight > time.time():
+			tLocalMidnight -= 86400
+			
+		### Get the rainfall from an hour ago, from local midnight, and year-to-date
+		jk, entry = self.db.getData(age=3630)
+		rainHour = entry['rainfall']
+		jk, entry  = self.db.getData(age=time.time()-tLocalMidnight+30)
+		rainDay = entry['rainfall']
+		jk, entry = self.db.getDataYearStart()
+		rainYear = entry['rainfall']
+		
+		## Cleanup
+		for key in ('temperature', 'windchill', 'dewpoint', 'indoorTemperature', 'indoorDewpoint'):
+			try:
+				output[key] = temp_C2F( output[key] )
+			except KeyError:
+				pass
+		for key in ('average', 'gust'):
+			try:
+				output[key] = speed_ms2mph( output[key] )
+			except KeyError:
+				pass
+		for key in ('rainrate', 'rainfall'):
+			try:
+				output[key] = length_mm2in( output[key] )
+			except KeyError:
+				pass
+		if rainHour >= 0 and rainDay >= 0 and rainYear >= 0:
+			try:
+				output['rainfallHour'] = output['rainfall'] - length_mm2in( rainHour )
+				if output['rainfallHour'] < 0:
+					output['rainfallHour'] = 0.0
+				output['rainfallDay']  = output['rainfall'] - length_mm2in( rainDay )
+				if output['rainfallDay'] < 0:
+					output['rainfallDay'] = 0.0
+				output['rainfallYear'] = output['rainfall'] - length_mm2in( rainYear )
+				if output['rainfallYear'] < 0:
+					output['rainfallYear'] = 0.0
+			except KeyError:
+				pass
+		output['pressure'] = pressure_mb2inHg( output['pressure'] )
+		
+		## Timestamp
+		output['timestamp'] = datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S')
+			
+		## Done
+		return output
+
+
+# Main web interface
+class Interface(object):
+	def __init__(self, config, db, leds):
+		self.config = config
+		self.db = db
+		self.leds = leds
+		
+		self.query = AJAX(config, db, leds)
+		
+	@cherrypy.expose
+	def index(self):
+		ts, kwds = self.db.getData()
+		kwds['tNow'] = datetime.now()
+		kwds['tzOffset'] = int(datetime.now().strftime("%s")) - int(datetime.utcnow().strftime("%s"))
+		
+		template = jinjaEnv.get_template('outdoor.html')
+		return template.render({'kwds':kwds})
+		
+	@cherrypy.expose
+	def indoor(self):
+		ts, kwds = self.db.getData()
+		kwds['tNow'] = datetime.now()
+		kwds['tzOffset'] = int(datetime.now().strftime("%s")) - int(datetime.utcnow().strftime("%s"))
+		
+		template = jinjaEnv.get_template('indoor.html')
+		return template.render({'kwds':kwds})
+		
+	@cherrypy.expose
+	def configure(self, **kwds):
+		if len(kwds) == 0:
+			kwds = self.config.asDict()
+		else:
+			self.config.fromDict(kwds)
+			saveConfig(CONFIG_FILE, self.config)
+			
+		template = jinjaEnv.get_template('config.html')
+		return template.render({'kwds':kwds})		
+
+
 def main(args):
 	# Parse the command line and read in the configuration file
-	config = parseOptions(args)
+	cmdConfig = parseOptions(args)
 	
-	# Setup the logging
-	## Basic
+	# Setup logging
 	logger = logging.getLogger(__name__)
-	if config['debug']:
+	logFormat = logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+	logFormat.converter = time.gmtime
+	logHandler = WatchedFileHandler(cmdConfig['logfile'])
+	logHandler.setFormatter(logFormat)
+	logger.addHandler(logHandler)
+	if cmdConfig['debug']:
 		logger.setLevel(logging.DEBUG)
 	else:
 		logger.setLevel(logging.INFO)
-	## Handler
-	handler = logging.handlers.SysLogHandler(address='/dev/log')
-	logger.addHandler(handler)
-	## Format
-	format = formatter = logging.Formatter(os.path.basename(__file__)+'[%(process)d]: %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-	handler.setFormatter(format)
-	
+		
 	# PID file
-	if config['pidFile'] is not None:
-		fh = open(config['pidFile'], 'w')
+	if cmdConfig['pidFile'] is not None:
+		fh = open(cmdConfig['pidFile'], 'w')
 		fh.write("%i\n" % os.getpid())
 		fh.close()
-	logger.info('Starting wxPi.py')
+		
+	# CherryPy configuration
+	cherrypy.config.update({'server.socket_host': '0.0.0.0', 'environment': 'production'})
+	cpConfig = {'/css': {'tools.staticdir.on': True,
+						 'tools.staticdir.dir': CSS_PATH},
+          		'/js':  {'tools.staticdir.on': True,
+          				 'tools.staticdir.dir': JS_PATH}
+          		}
+				
+	# Report on who we are
+	logger.info('Starting wxPi.py with PID %i', os.getpid())
+	logger.info('All dates and times are in UTC except where noted')
 	
-	# Setup a flag that we can toggle if we receive a signal
-	alive = threading.Event()
-	alive.set()
-	
-	# Setup handler for SIGTERM so that we aren't left in a funny state
-	def HandleSignalExit(signum, loopflag=alive, logger=logger):
-		logger.info('Exiting on signal %i', signum)
-		
-		# Stop the logger
-        	logger.info('Finished')
-        	logging.shutdown()
-		
-		# Stop the loop
-		sys.exit(0)
-		
-	# Hook in the signal handler - SIGINT SIGTERM SIGQUIT SIGPIPE
-	signal.signal(signal.SIGINT,  HandleSignalExit)
-	signal.signal(signal.SIGTERM, HandleSignalExit)
-	signal.signal(signal.SIGQUIT, HandleSignalExit)
-	signal.signal(signal.SIGPIPE, HandleSignalExit)
+	# Load in the configuration
+	config = loadConfig(cmdConfig['configFile'])
 	
 	# Get the latest from the database
-	try:
-		db = Archive()
-		tData, sensorData = db.getData()
-		if time.time() - tData > 2*config['duration']:
-			sensorData = {}
-			
-	except RuntimeError, e:
-		db = None
-		tData, sensorData = time.time(), {}
-		logging.error(str(e))
+	db = Archive()
+	db.start()
+	
+	tData, sensorData = db.getData()
+	if time.time() - tData > 2*config.getfloat('Station', 'duration'):
+		sensorData = {}
 		
+	# Initialize the LEDs
+	leds = initLEDs(config)
+	
 	# Make sure the database has provided something useful.  If not, we need to
 	# run several iterations to build up the current picture of what is going on.
 	if len(sensorData.keys()) == 0:
@@ -214,90 +333,41 @@ def main(args):
 		buildState = False
 		loopsForState = 1
 		
-	# Enter the main loop
-	tLastUpdate = 0.0
-	while alive.isSet():
-		## Begin the loop
-		t0 = time.time()
+	# Start the sensor polling
+	bg = PollingProcessor(config, db, leds, buildState=buildState, loopsForState=loopsForState, sensorData=sensorData)
+	bg.start()
+	
+	# Initialize the web interface
+	ws = Interface(config, db, leds)
+	#cherrypy.quickstart(ws, config=cpConfig)
+	cherrypy.tree.mount(ws, "/", config=cpConfig)
+	cherrypy.engine.start()
+	cherrypy.engine.block()
+	
+	# Shutdown process
+	logger.info('Shutting down wxPi, please wait...')
+	
+	# Stop the polling thread
+	bg.cancel()
+	
+	# Make sure the LEDs are off
+	for color in leds.keys():
+		leds[color].off()
 		
-		## Read from the 433 MHz radio
-		for i in xrange(loopsForState):
-			config['red'].on()
-			tData = time.time() + int(round(config['duration']-5))/2.0
-			packets = read433(config['radioPin'], int(round(config['duration']-5)))
-			config['red'].off()
-		
-			## Process the received packets and update the internal state
-			config['yellow'].on()
-			sensorData = parsePacketStream(packets, elevation=config['elevation'], 
-											inputDataDict=sensorData)
-			config['yellow'].off()
-		
-			# Poll the BMP085/180 - if needed
-			if config['enableBMP085']:
-				config['red'].on()
-				ps = BMP085(address=0x77, mode=3)
-				pressure = ps.readPressure() / 100.0
-				temperature = ps.readTemperature()
-				config['red'].off()
-			
-				config['yellow'].on()
-				sensorData['pressure'] =  pressure
-				sensorData['pressure'] = computeSeaLevelPressure(sensorData['pressure'], config['elevation'])
-				if 'indoorHumidity' in sensorData.keys():
-					sensorData['indoorTemperature'] = ps.readTemperature()
-					sensorData['indoorDewpoint'] = computeDewPoint(sensorData['indoorTemperature'], sensorData['indoorHumidity'])
-				config['yellow'].off()
-				
-		## Have we built up the state?
-		if buildState:
-			loopsForState = 1
-			
-		## Check if there is anything to update in the archive
-		config['yellow'].on()
-		if tData != tLastUpdate:
-			db.writeData(tData, sensorData)
-			logger.info('Saving current state to archive')
-		else:
-			logger.warning('Data timestamp has not changed since last poll, archiving skipped')
-		config['yellow'].off()
-		
-		## Post the results to WUnderground
-		if tData != tLastUpdate:
-			uploadStatus = wuUploader(config['ID'], config['PASSWORD'], 
-										tData, sensorData, archive=db, 
-										includeIndoor=config['includeIndoor'])
-										
-			if uploadStatus:
-				tLastUpdate = 1.0*tData
-				
-				logger.info('Posted data to WUnderground')
-				config['green'].blink()
-				time.sleep(3)
-				config['green'].blink()
-			else:
-				logger.error('Failed to post data to WUnderground')
-				config['red'].blink()
-				time.sleep(3)
-				config['red'].blink()
-				
-		else:
-			logger.warning('Data timestamp has not changed since last poll, archiving skipped')
-			
-		## Done
-		t1 = time.time()
-		tSleep = config['duration'] - (t1-t0)
-		tSleep = tSleep if tSleep > 0 else 0
-		
-		## Sleep
-		time.sleep(tSleep)
-		
-	# Stop the logger
-	logger.info('Finished')	
-	logging.shutdown()
+	# Shutdown the archive
+	db.cancel()
 
 
 if __name__ == "__main__":
-	daemonize('/dev/null', '/dev/null', '/tmp/wxPi.stderr')
+	try:
+		os.unlink('/tmp/wxPi.stdout')
+	except OSError:
+		pass
+	try:
+		os.unlink('/tmp/wxPi.stderr')
+	except OSError:
+		pass
+		
+	daemonize('/dev/null', '/tmp/wxPi.stdout', '/tmp/wxPi.stderr')
 	main(sys.argv[1:])
 	

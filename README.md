@@ -7,6 +7,8 @@ Bosch BMP085/180 temperature and pressure sensor.
 Requirements
 ------------
  * Python >=2.7 and <3.0
+ * cherrypy >= 3.0
+ * jinja2
  * sqlite3
  * RPi.GPIO
  * wiringPi

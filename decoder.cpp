@@ -1,4 +1,5 @@
 #include "Python.h"
+#include <string>
 #include <iostream>
 #include <stdlib.h>
 #include <time.h>
@@ -22,9 +23,10 @@ RCSwitch *rc;
 
 static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 	PyObject *output, *bits, *temp, *temp2, *temp2a, *temp2b, *temp3;
-	long inputPin, duration, verbose, tStart;
+	long inputPin, duration, verbose, tStart, nMessage, i;
 	struct sigaction sigact;
 	char message[512];
+	char messages[1024][512];
 	
 	verbose = 0;
 	static char *kwlist[] = {"inputPin", "duration", NULL};
@@ -52,11 +54,11 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 		
 		initalized = (int) inputPin;
 	}
-   	
-	// Setup the output list
-	bits = PyList_New(0);
 	
 	// Go
+	Py_BEGIN_ALLOW_THREADS
+	
+	nMessage = 0;
 	tStart = (long) time(NULL);
 	while ((long) time(NULL) - tStart < duration && !do_exit) {
 		//// Check for a message
@@ -67,25 +69,41 @@ static PyObject *read433(PyObject *self, PyObject *args, PyObject *kwds) {
 				cout << message << "\n" << flush;
 			}
 			
-			temp = PyString_FromString(message);
-			temp2 = PyObject_CallMethod(temp, "split", "(si)", " ", 1);
+			strcpy(messages[nMessage], message);
+			nMessage += 1;
 			
-			temp2a = PyList_GetItem(temp2, (Py_ssize_t) 0);
-			temp2b = PyList_GetItem(temp2, (Py_ssize_t) 1);
-			temp3 = PyTuple_Pack((Py_ssize_t) 2, temp2a, temp2b);
-			PyList_Append(bits, temp3);
+			if( nMessage == 1024 ) {
+				duration = 0;
+			}
 			
-			Py_DECREF(temp);
-			Py_DECREF(temp2);
-			Py_DECREF(temp3);
 		}
 		
 		//// Wait a bit (~1 ms)
 		usleep(1000);
 	}
 	
+	Py_END_ALLOW_THREADS
+	
 	// Shutdown the receiver
 	rc->disableReceive();
+	
+	// Setup the output list
+	bits = PyList_New(0);
+	for(i=0; i<nMessage; i++) {
+		strcpy(message, messages[i]);
+		
+		temp = PyString_FromString(message);
+		temp2 = PyObject_CallMethod(temp, "split", "(si)", " ", 1);
+		
+		temp2a = PyList_GetItem(temp2, (Py_ssize_t) 0);
+		temp2b = PyList_GetItem(temp2, (Py_ssize_t) 1);
+		temp3 = PyTuple_Pack((Py_ssize_t) 2, temp2a, temp2b);
+		PyList_Append(bits, temp3);
+		
+		Py_DECREF(temp);
+		Py_DECREF(temp2);
+		Py_DECREF(temp3);
+	}
 	
 	// Return
 	output = Py_BuildValue("O", bits);

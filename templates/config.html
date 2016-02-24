@@ -1,0 +1,110 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="/css/jquery.mobile-1.4.5.min.css">
+	<link rel="stylesheet" href="/css/themes/Pi2O.css" />
+    <link rel="stylesheet" href="/css/themes/jquery.mobile.icons.min.css" />
+	<link href="/css/images/favicon.ico" rel="shortcut icon" type="image/x-icon" />
+	<script src="/js/jquery-1.11.1.min.js"></script>
+	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
+	<style>
+	.ui-hide-label.ui-br, .no-field-separator {
+		border-bottom-width: 0;
+	}
+	.ui-field-contain.ui-hide-label, .no-field-separator {
+		margin: 1em 0;
+		padding: 0;
+	}
+	</style>
+</head>
+<body>
+	<div id="config" data-role="page">
+	
+	<script type="text/javascript">
+		function onload() {
+			// Nothing yet
+		}
+		
+		$(document).on("pagecreate", "#config", onload);
+	</script>
+	
+	<div data-role="header" role="banner" class="ui-header ui-bar-inherit">
+		<h1 class="ui-title" role="heading" aira-level="1">Configuration</h1>
+	</div>
+	<form method="post" action="configure">
+		<div data-role="main" class="ui-content">
+			<h3 class="ui-title" role="heading" aira-level="1">WUnderground Account</h3>
+			<div class="ui-field-contain">
+				<label for="account-ID">PWS ID:</label>
+				<input type="text" name="account-id" value="{{ kwds.get("account-id") }}"/>
+				<label for="account-password">Password:</label>
+				<input type="text" name="account-password" value="{{ kwds.get("account-password") }}"/>
+			</div>
+			
+			<h3 class="ui-title" role="heading" aira-level="1">Station Information</h3>
+			<div class="ui-field-contain">
+				<label for="station-elevation">Elevation [m]:</label>
+				<input type="text" name="station-elevation" value="{{ kwds.get("station-elevation") }}"/>
+				<label for="station-radiopin">Radio GPIO Pin:</label>
+				<select class="station-radiopin" id="station-radiopin" name="station-radiopin">
+					<option value="4"  {{ 'selected' if kwds.get("station-radiopin") == '4'  else '' }}>4 </option>
+					<option value="17" {{ 'selected' if kwds.get("station-radiopin") == '17' else '' }}>17</option>
+					<option value="18" {{ 'selected' if kwds.get("station-radiopin") == '18' else '' }}>18</option>
+					<option value="27" {{ 'selected' if kwds.get("station-radiopin") == '27' else '' }}>27</option>
+				</select>
+				<label for="station-enablebmp085">Use BMP085 for Pressure:</label>
+				<select class="enabled" name="station-enablebmp085" data-role="slider">
+					<option value="False">Off</option>
+					<option value="True" {{ 'selected' if kwds.get("station-enablebmp085") == 'True' else '' }}>On</option>
+				</select><br />
+				<label for="station-includeindoor">Send Indoor Data:</label>
+				<select class="enabled" name="station-includeindoor" data-role="slider">
+					<option value="False">Off</option>
+					<option value="True" {{ 'selected' if kwds.get("station-includeindoor") == 'True' else '' }}>On</option>
+				</select> 
+			</div>
+			
+			<h3 class="ui-title" role="heading" aira-level="1">LEDs</h3>
+			<div class="ui-field-contain">
+				<label for="led-redpin">Red GPIO Pin:</label>
+				<select class="led-redpin" id="led-redpin" name="led-redpin">
+				     <option value="-1" {{ 'selected' if kwds.get("led-redpin") == '-1' else '' }}>Not Installed</option>
+					<option value="4"  {{ 'selected' if kwds.get("led-redpin") == '4'  else '' }}>4 </option>
+					<option value="17" {{ 'selected' if kwds.get("led-redpin") == '17' else '' }}>17</option>
+					<option value="18" {{ 'selected' if kwds.get("led-redpin") == '18' else '' }}>18</option>
+					<option value="27" {{ 'selected' if kwds.get("led-redpin") == '27' else '' }}>27</option>
+				</select>
+				<label for="led-yellowpin">Yellow GPIO Pin:</label>
+				<select class="led-yellowpin" id="led-yellowpin" name="led-yellowpin">
+					<option value="-1" {{ 'selected' if kwds.get("led-yellowpin") == '-1' else '' }}>Not Installed</option>
+					<option value="4"  {{ 'selected' if kwds.get("led-yellowpin") == '4'  else '' }}>4 </option>
+					<option value="17" {{ 'selected' if kwds.get("led-yellowpin") == '17' else '' }}>17</option>
+					<option value="18" {{ 'selected' if kwds.get("led-yellowpin") == '18' else '' }}>18</option>
+					<option value="27" {{ 'selected' if kwds.get("led-yellowpin") == '27' else '' }}>27</option>
+				</select>
+				<label for="led-greenpin">Green GPIO Pin:</label>
+				<select class="led-greenpin" id="led-greenpin" name="led-greenpin">
+					<option value="-1" {{ 'selected' if kwds.get("led-greenpin") == '-1' else '' }}>Not Installed</option>
+					<option value="4"  {{ 'selected' if kwds.get("led-greenpin") == '4'  else '' }}>4 </option>
+					<option value="17" {{ 'selected' if kwds.get("led-greenpin") == '17' else '' }}>17</option>
+					<option value="18" {{ 'selected' if kwds.get("led-greenpin") == '18' else '' }}>18</option>
+					<option value="27" {{ 'selected' if kwds.get("led-greenpin") == '27' else '' }}>27</option>
+				</select>
+			</div>
+			
+			<button type="submit">Save Configuration</button>
+		</div>
+	</form>
+	<br />
+	<div data-role="footer" role="banner" class="ui-header ui-bar-inherit">
+		<div data-role="navbar">
+			<ul>
+				<li><a href="/">Outdoor</a></li>
+                    <li><a href="/indoor">Indoor</a></li>
+                    <li><a href="/configure">Configuration</a></li>
+			</ul>
+		</div>
+	</div>
+</body>
+</html>

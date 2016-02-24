@@ -1,0 +1,162 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+  	<link rel="stylesheet" href="/css/jquery.mobile-1.4.5.min.css">
+	<link rel="stylesheet" href="/css/themes/Pi2O.css" />
+  	<link rel="stylesheet" href="/css/themes/jquery.mobile.icons.min.css" />
+	<link href="/css/images/favicon.ico" rel="shortcut icon" type="image/x-icon" />
+	<script src="/js/jquery-1.11.1.min.js"></script>
+	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
+	<style>
+	.ui-hide-label.ui-br, .no-field-separator {
+		border-bottom-width: 0;
+	}
+	.ui-field-contain.ui-hide-label, .no-field-separator {
+		margin: 1em 0;
+		padding: 0;
+	}
+	</style>
+</head>
+<body>
+	<div id="outdoor" data-role="page">
+	
+	<script type="text/javascript">
+		function updateClock() { 
+			// get local time
+			var date = new Date();
+			var lt = new Date( date.getTime() + {{ kwds.get('tzOffset') }}*1000 );
+			var year = lt.getUTCFullYear();
+			var month = lt.getUTCMonth() + 1;
+			var day = lt.getUTCDate();
+			var hours = lt.getUTCHours();
+			var minutes = lt.getUTCMinutes();
+			var seconds = lt.getUTCSeconds();
+			if (day < 10) {
+				day = "0" + day;
+			}
+			if (month < 10) {
+				month = "0" + month;
+			}
+			if (hours < 10) {
+				hours = "0" + hours;
+			}
+			if (hours > 12) {
+				hours = hours - 12;
+				ampm = "PM";
+			} else {
+				ampm = "AM";
+			}
+			if (minutes < 10) {
+				minutes = "0" + minutes;
+			}
+			if (seconds < 10) {
+				seconds = "0" + seconds;
+			}
+			var lts = year + "/" + month + "/" + day;
+			lts = lts + " " + hours + ":" + minutes + ":" + seconds + " " + ampm;
+
+			// update text fields
+			var span = document.getElementById('ltClock');
+			span.innerHTML = lts;
+			
+			setTimeout("updateClock()", 1000); 
+		}
+		
+		function setSummary(data) {
+			wxReport = "";
+			wxReport += data['temperature'].toFixed(1)+"&deg; F with "+data['humidity'].toFixed()+"% humidity<br />";
+			wxReport += " dew point is "+data['dewpoint'].toFixed(1)+"&deg; F<br />";
+			wxReport += " barometric pressure is "+data['pressure'].toFixed(2)+" in-Hg<br />";
+			if( data.hasOwnProperty("windchill") ) {
+				if( data['windchill'] != data['temperature'] ) {
+					wxReport += " windchill is "+data['windchill'].toFixed(1)+"&deg; F<br \>";
+				}
+			}
+			$('#temperature').html(wxReport);
+			
+			wxReport = "";
+			if( data.hasOwnProperty("average") ) {
+				wxReport += "average "+data['average'].toFixed(1)+" mph @ "+data['direction'].toFixed()+" degrees<br />";
+				wxReport += " gusting up to "+data['gust'].toFixed(1)+" mph<br />";
+				$('#wind').html(wxReport);
+			}
+			
+			wxReport = "";
+			if( data.hasOwnProperty("rainrate") ) {
+				wxReport += "Current rainfall rate is "+data['rainrate'].toFixed(2)+" in/hr<br /><br />";
+				wxReport += "Totals:<br />";
+				wxReport += " last hour is "+ data['rainfallHour'].toFixed(2)+" in<br />";
+				wxReport += " today is "+ data['rainfallDay'].toFixed(2)+" in<br />";
+				wxReport += " year-to-date is "+ data['rainfallYear'].toFixed(2)+" in<br />";
+				$('#rain').html(wxReport);
+			}
+			
+			wxReport = "";
+			if( data.hasOwnProperty("forecast") ) {
+				if( data['forecast'] != 'unknown' ) {
+					wxReport += output['forecast'];
+					$('#forecast').html(wxReport);
+				}
+			}
+			
+			$('#title').html('Outdoor Conditions - Updated '+data['timestamp']);
+		}
+		
+		function pollSummary() {
+			$.ajax({url: "/query/summary",
+				    type: "GET",
+					success: setSummary,
+					dataType: "json",
+					complete: setTimeout(function() {
+										if( document.getElementById('outdoorPage') != null ) {
+											pollSummary();
+										}
+									}, 15000),
+					timeout: 2000
+			});
+		}
+		
+		function onload() {
+			updateClock();
+			pollSummary();
+		}
+		
+		$(document).on("pageshow", "#outdoor", onload);
+	</script>
+	
+	<div id="outdoorPage"></div>
+	
+	<div data-role="header" role="banner" class="ui-header ui-bar-inherit">
+		<h1 class="ui-title" role="heading" aira-level="1">wxPi</h1>
+	</div>
+	<div data-role="main" class="ui-content">
+		<div class="ui-field-contain">
+			<h3 class="ui-title" role="heading" aira-level="1">Local Time</h3>
+			<span id="ltClock" class="clock"></span><br />
+		</div>
+		
+		<div class="ui-field-contain">
+			<h3 id="title" class="ui-title" role="heading" aira-level="1">Outdoor Conditions</h3>
+			<h4>Temperature</h4>
+			<span id="temperature">Not provided.</span>
+			<h4>Wind</h4>
+			<span id="wind">Not provided.</span>
+			<h4>Rain</h4>
+			<span id="rain">Not provided.</span>
+			<h4>Forecast</h4>
+			<span id="forecast">Not provided.</span>
+		</div>
+	</div>
+	<br />
+	<div data-role="footer" role="banner" class="ui-header ui-bar-inherit">
+                <div data-role="navbar">
+                        <ul>
+                                <li><a href="/">Outdoor</a></li>
+                                <li><a href="/indoor">Indoor</a></li>
+                                <li><a href="/configure">Configuration</a></li>
+                        </ul>
+                </div>
+        </div>
+</body>
+</html>

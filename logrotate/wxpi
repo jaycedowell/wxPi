@@ -1,0 +1,10 @@
+# Keep two weeks worth of wxPi logs
+/var/log/wxpi {
+	daily
+	rotate 14
+        compress
+        delaycompress
+        copytruncate
+	ifempty
+}
+

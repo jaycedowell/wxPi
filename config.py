@@ -5,12 +5,18 @@ File for dealing with the configuration of wxPi.py.
 """
 
 import os
-import re
+import logging
+import threading
+from ConfigParser import SafeConfigParser, NoSectionError
 
 from led import GPIOLED as LED
 
 __version__ = '0.2'
-__all__ = ['CONFIG_FILE', 'loadConfig', '__version__', '__all__']
+__all__ = ['CONFIG_FILE', 'loadConfig', 'initLEDs', 'saveConfig', '__version__', '__all__']
+
+
+# Logger instance
+confLogger = logging.getLogger('__main__')
 
 
 # Files
@@ -21,67 +27,190 @@ _BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(_BASE_PATH, 'wxPi.config')
 
 
+class LockingConfigParser(SafeConfigParser):
+	"""
+	Sub-class of ConfigParser.SafeConfigParser that wraps the get, set, and 
+	write methods with a semaphore to ensure that only one get/set/read/write 
+	happens at a time.  The sub-class also adds asDict and fromDict methods
+	to make it easier to tie the configuration into webforms.
+	"""
+	
+	_lock = threading.Semaphore()
+	
+	def get(self, *args, **kwds):
+		"""
+		Locked get() method.
+		"""
+		
+		#self._lock.acquire()
+		value = SafeConfigParser.get(self, *args, **kwds)
+		#self._lock.release()
+		return value
+		
+	def getint(self, *args, **kwds):
+		"""
+		Locked getint() method.
+		"""
+		
+		value = SafeConfigParser.getint(self, *args, **kwds)
+		return int(value)
+		
+	def getfloat(self, *args, **kwds):
+		"""
+		Locked getfloat() method.
+		"""
+		
+		value = SafeConfigParser.getfloat(self, *args, **kwds)
+		return float(value)
+		
+	def getbool(self, *args, **kwds):
+		"""
+		Locked getbool() method.
+		"""
+		
+		value = SafeConfigParser.get(self, *args, **kwds)
+		if value.lower() in ('true', 'enabled', 'on', 'yes'):
+			value = True
+		else:
+			value = False
+		return value
+		
+	def set(self, *args, **kwds):
+		"""
+		Locked set() method.
+		"""
+		
+		#self._lock.acquire()
+		SafeConfigParser.set(self, *args, **kwds)
+		#self._lock.release()
+		
+	def read(self, *args, **kwds):
+		"""
+		Locked read() method.
+		"""
+		
+		SafeConfigParser.read(self, *args, **kwds)
+		
+	def write(self, *args, **kwds):
+		"""
+		Locked write() method.
+		"""
+		
+		SafeConfigParser.write(self, *args, **kwds)
+		
+	def asDict(self):
+		"""
+		Return the configuration as a dictionary with keys structured as
+		section-option.
+		"""
+		
+		configDict = {}
+		for section in self.sections():
+			for keyword,value in self.items(section):
+				configDict['%s-%s' % (section.lower(), keyword)] = value
+		
+		# Done
+		return configDict
+		
+	def fromDict(self, configDict):
+		"""
+		Given a dictionary created by asDict(), update the configuration 
+		as needed.
+		"""
+		
+		# Loop over the pairs in the dictionary
+		for key,value in configDict.iteritems():
+			try:
+				section, keyword = key.split('-', 1)
+				section = section.capitalize()
+				self.set(section, keyword, value)
+			except Exception, e:
+				print str(e)
+				pass
+				
+		# Done
+		return True
+
+
 def loadConfig(filename):
 	"""
 	Read in the configuration file and return a dictionary of the 
 	parameters.
 	"""
 	
-	# RegEx for parsing the configuration file lines
-	configRE = re.compile(r'\s*:\s*')
-
-	# Initial values
-	config = {'radioPin': 18, 
-			  'duration': 60.0, 
-			  'includeIndoor': False, 
-			  'elevation': 0.0, 
-			  'enableBMP085': True, 
-			  'redPin': -1, 
-			  'yellowPin': -1, 
-			  'greenPin': -1}
-
-	# Parse the file
+	# Initial configuration file
+	config = LockingConfigParser()
+	
+	## Dummy WUnderground PWS information
+	##  1) ID - PWS ID
+	##  2) Password - PWS upload password
+	config.add_section('Account')
+	config.set('Account', 'id', 'Your_Id_Here')
+	config.set('Account', 'password', 'Your_Password_Here')
+	
+	## Dummy station information
+	##  1) elevation - Station elevation in meters
+	##  2) duration - Duration, in seconds, to record data for
+	##  3) radioPin - GPIO pin that the radio is connected to
+	##  4) enableBMP085 - enable reading a BMP085/BMP180 sensor over I2C
+	##  5) includeIndoor - Whether or not to include indoor data
+	config.add_section('Station')
+	config.set('Station', 'elevation', '0.0')
+	config.set('Station', 'duration', '60.0')
+	config.set('Station', 'radiopin', '18')
+	config.set('Station', 'enablebmp085', 'True')
+	config.set('Station', 'includeindoor', 'False')
+	
+	## Dummy LED information
+	##  1) redPin - GPIO pin that a red LED is attached to
+	##  2) yellowPin - GPIO pin that a yellow LED is attached to
+	##  3) greenPin - GPIO pin that a green LED is attached to
+	config.add_section('LED')
+	config.set('LED', 'redpin', '27')
+	config.set('LED', 'yellowpin', '17')
+	config.set('LED', 'greenpin', '4')
+	
+	# Try to read in the actual configuration file
 	try:
-		fh = open(filename, 'r')
-		for line in fh:
-			line = line.replace('\n', '')
-			## Skip blank lines
-			if len(line) < 3:
-				continue
-			## Skip comments
-			if line[0] == '#':
-				continue
-				
-			## Update the dictionary
-			key, value = configRE.split(line, 1)
-			config[key] = value
-			
-	except IOError:
+		config.read(filename)
+		confLogger.info('Loaded configuration from \'%s\'', os.path.basename(filename))
+		
+	except:
 		pass
 		
-	finally:
-		fh.close()
-		
-	# Convert the values as needed
-	## Integer type conversions
-	for key in ('radioPin', 'redPin', 'yellowPin', 'greenPin'):
-		config[key] = int(config[key])	
-	## Float type conversion
-	for key in ('duration', 'elevation'):
-		config[key] = float(config[key])	
-	## Boolean type conversions
-	for key in ('includeIndoor', 'enableBMP085'):
-		config[key] = bool(config[key])
-		
-	# Create instances for the LEDs
-	config['red'] = LED(config['redPin'])
-	config['yellow'] = LED(config['yellowPin'])
-	config['green'] = LED(config['greenPin'])
-	
-	# Remove the LED pins since we have LED instances now
-	del config['redPin']
-	del config['yellowPin']
-	del config['greenPin']
-	
 	# Done
 	return config
+
+
+
+def initLEDs(config):
+	"""
+	Given a LockingConfigParser configuration instance, create a dictionary of 
+	GPIOLED instances to control the various LEDs.
+	"""
+	
+	# Create the GPIOLED instances
+	leds = {}
+	for color in ('red', 'yellow', 'green'):
+		try:
+			pin = config.get('LED', '%spin' % color)
+			leds[color] = LED(pin)
+			
+		except NoSectionError:
+			leds[color] = LED(-1)
+			
+	# Done
+	return leds
+
+
+def saveConfig(filename, config):
+	"""
+	Given a filename and a LockingConfigParser, write the configuration to 
+	disk.
+	"""
+	
+	fh = open(filename, 'w')
+	config.write(fh)
+	fh.close()
+	
+	confLogger.info('Saved configuration to \'%s\'', os.path.basename(filename))

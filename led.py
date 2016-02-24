@@ -24,6 +24,9 @@ class GPIOLED(object):
 		# GPIO pin
 		self.pin = int(pin)
 		
+		# State information (for polling)
+		self.state = 'unknown'
+		
 		# Thread information for blinking
 		self.thread = None
 		self.alive = threading.Event()
@@ -46,15 +49,27 @@ class GPIOLED(object):
 			except IOError:
 				pass
 				
+	def getState(self):
+		"""
+		Get the state of the LED.
+		"""
+		
+		return self.state
+		
 	def on(self):
 		"""
 		Turn the LED on.
 		"""
 		
 		if self.pin > 0:
-			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
-			fh.write('1')
-			fh.close()
+			try:
+				fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+				fh.write('1')
+				fh.close()
+			
+				self.state = 'on'
+			except IOError:
+				pass
 			
 	def off(self):
 		"""
@@ -62,10 +77,15 @@ class GPIOLED(object):
 		"""
 	
 		if self.pin > 0:
-			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
-			fh.write('0')
-			fh.close()
-			
+			try:
+				fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+				fh.write('0')
+				fh.close()
+				
+				self.state = 'off'
+			except IOError:
+				pass
+				
 	def blink(self, blinkPeriod=0.25):
 		"""
 		Set the LED to blinking with the specified interval in seconds.   This function
@@ -76,8 +96,10 @@ class GPIOLED(object):
 		
 		if self.thread is not None:
 			self._stop()
+			self.state = 'off'
 		else:
 			self._start()
+			self.state = 'blink'
 			
 	def _start(self):
 		"""
@@ -110,15 +132,23 @@ class GPIOLED(object):
 		
 		while self.alive.isSet():
 			# On
-			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
-			fh.write('1')
-			fh.close()
+			try:
+				fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+				fh.write('1')
+				fh.close()
+			except IOError:
+				pass
+				
 			if self.alive.isSet():
 				time.sleep(self.period)
 				
 			# Off
-			fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
-			fh.write('0')
-			fh.close()
+			try:
+				fh = open('/sys/class/gpio/gpio%i/value' % self.pin, 'w')
+				fh.write('0')
+				fh.close()
+			except IOError:
+				pass
+				
 			if self.alive.isSet():
 				time.sleep(self.period)
