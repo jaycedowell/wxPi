@@ -22,7 +22,7 @@ Usage
 
   3) Create the initial database in the 'archive' directory using the 'initDB.sh' script
     
-  4) Update the configuration file 'wxPi.config'
+  4) Install the logrotate configuration file in /etc/logrotate.d
   
   5) Run the script via ./wxPi.py
 
