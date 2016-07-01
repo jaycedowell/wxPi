@@ -210,7 +210,12 @@ class Archive(object):
 		try:
 			row = output[0]
 		except IndexError:
-			return 0, {}
+			## Looks like we don't have a full year yet, get the oldest entry avaliable
+			sqlCmd = 'SELECT * FROM wx ORDER BY dateTime LIMIT 1' % tYear
+			rid = self._backend.appendRequest(sqlCmd)
+			
+			## Fetch the output
+			output = self._backend.getResponse(rid)
 			
 		# Check for an empty database
 		if row is None:

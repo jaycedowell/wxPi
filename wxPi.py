@@ -215,21 +215,31 @@ class AJAX(object):
 				output[key] = length_mm2in( output[key] )
 			except KeyError:
 				pass
-		if rainHour >= 0 and rainDay >= 0 and rainYear >= 0:
+		output['pressure'] = pressure_mb2inHg( output['pressure'] )
+		
+		## Computed rain quantities
+		if rainHour >= 0:
 			try:
 				output['rainfallHour'] = output['rainfall'] - length_mm2in( rainHour )
 				if output['rainfallHour'] < 0:
 					output['rainfallHour'] = 0.0
+			except KeyError:
+				pass
+		if rainDay >= 0:
+			try:
 				output['rainfallDay']  = output['rainfall'] - length_mm2in( rainDay )
 				if output['rainfallDay'] < 0:
 					output['rainfallDay'] = 0.0
+			except KeyError:
+				pass
+		if rainYear >= 0:
+			try:
 				output['rainfallYear'] = output['rainfall'] - length_mm2in( rainYear )
 				if output['rainfallYear'] < 0:
 					output['rainfallYear'] = 0.0
 			except KeyError:
 				pass
-		output['pressure'] = pressure_mb2inHg( output['pressure'] )
-		
+				
 		## Timestamp
 		output['timestamp'] = datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S')
 			
