@@ -309,7 +309,7 @@ def main(args):
 		fh.close()
 		
 	# CherryPy configuration
-	cherrypy.config.update({'server.socket_host': '0.0.0.0', 'environment': 'production'})
+	cherrypy.config.update({'server.socket_host': '0.0.0.0', 'server.socket_port': 80, 'environment': 'production'})
 	cpConfig = {'/css': {'tools.staticdir.on': True,
 						 'tools.staticdir.dir': CSS_PATH},
           		'/js':  {'tools.staticdir.on': True,
